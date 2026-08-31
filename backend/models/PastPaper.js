@@ -58,6 +58,10 @@ const pastPaperSchema = new mongoose.Schema(
       type: String,
       required: [true, 'PDF file URL or path is required'],
     },
+    cloudinaryPublicId: {
+      type: String,
+      default: '',
+    },
     fileName: {
       type: String,
       default: '',

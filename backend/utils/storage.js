@@ -1,38 +1,14 @@
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
-const crypto = require('crypto');
+const path = require('path');
+const cloudinary = require('./cloudinary');
 
-// Max file size limit from environment variable (default: 10MB)
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
+const MAX_FILE_SIZE =
+  parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
 
-// Ensure uploads subdirectories exist
-const ensureDirExists = (dirPath) => {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-};
+// Use memory storage because the PDF will be uploaded directly to Cloudinary.
+const memoryStorage = multer.memoryStorage();
 
-// Disk Storage Engine for local uploads (Organized into ol, al, university)
-const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const examType = (req.body.examType || 'OL').toLowerCase();
-    const targetFolder = ['ol', 'al', 'university'].includes(examType) ? examType : 'ol';
-    const uploadPath = path.join(__dirname, '..', 'uploads', 'past-papers', targetFolder);
-    
-    ensureDirExists(uploadPath);
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Generate safe filename: <hash>-<timestamp>.pdf
-    const randomHash = crypto.randomBytes(6).toString('hex');
-    const sanitizedOriginal = file.originalname.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-    const filename = `${sanitizedOriginal}-${randomHash}-${Date.now()}.pdf`;
-    cb(null, filename);
-  },
-});
-
-// File Filter: Enforce PDF only
+// PDF-only validation
 const pdfFileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const isPdfMime = file.mimetype === 'application/pdf';
@@ -41,37 +17,70 @@ const pdfFileFilter = (req, file, cb) => {
   if (isPdfMime && isPdfExt) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file format. Only PDF (.pdf) documents are permitted for past papers.'), false);
+    cb(
+      new Error(
+        'Invalid file format. Only PDF (.pdf) documents are permitted for past papers.'
+      ),
+      false
+    );
   }
 };
 
-// Multer Middleware Export
 const uploadPdf = multer({
-  storage: diskStorage,
+  storage: memoryStorage,
   limits: {
     fileSize: MAX_FILE_SIZE,
   },
   fileFilter: pdfFileFilter,
 });
 
-// Helper abstraction to delete a file from storage (supports local, expandable to Cloudinary/S3)
-const deleteStoredFile = (relativeOrAbsolutePath) => {
-  if (!relativeOrAbsolutePath) return;
-  try {
-    const fullPath = path.isAbsolute(relativeOrAbsolutePath)
-      ? relativeOrAbsolutePath
-      : path.join(__dirname, '..', relativeOrAbsolutePath.replace(/^\//, ''));
+// Upload PDF buffer to Cloudinary
+const uploadToCloudinary = (buffer, folder, originalName) => {
+  return new Promise((resolve, reject) => {
+    const safeName = path
+      .basename(originalName, path.extname(originalName))
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
 
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-    }
-  } catch (err) {
-    console.error('Storage File Unlink Error:', err.message);
+    const publicId = `${safeName}-${Date.now()}`;
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        public_id: publicId,
+        resource_type: 'raw',
+        format: 'pdf',
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+
+    uploadStream.end(buffer);
+  });
+};
+
+// Delete PDF from Cloudinary
+const deleteStoredFile = async (publicId) => {
+  if (!publicId) return;
+
+  try {
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'raw',
+    });
+  } catch (error) {
+    console.error('Cloudinary File Delete Error:', error.message);
   }
 };
 
 module.exports = {
   uploadPdf,
+  uploadToCloudinary,
   deleteStoredFile,
   MAX_FILE_SIZE,
 };

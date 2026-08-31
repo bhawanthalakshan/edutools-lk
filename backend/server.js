@@ -1,9 +1,12 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 
 // Route Imports
@@ -14,12 +17,14 @@ const articleRoutes = require('./routes/articleRoutes');
 const toolRoutes = require('./routes/toolRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const pastPaperRoutes = require('./routes/pastPaperRoutes');
-
+const dns = require("dns");
 // Middleware Imports
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 // Load environment variables
-dotenv.config();
+
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 // Environment Variable Validation Check
 if (!process.env.JWT_SECRET) {

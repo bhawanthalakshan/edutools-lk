@@ -1,7 +1,8 @@
-const path = require('path');
-const fs = require('fs');
 const PastPaper = require('../models/PastPaper');
-const { deleteStoredFile } = require('../utils/storage');
+const {
+  uploadToCloudinary,
+  deleteStoredFile,
+} = require('../utils/storage');
 
 // @desc    Get past papers with filtering, search & pagination
 // @route   GET /api/past-papers
@@ -112,28 +113,24 @@ const downloadPastPaper = async (req, res, next) => {
       throw new Error('Past paper record not found');
     }
 
-    // Atomically increment download count
-    paper.downloadCount += 1;
-    await paper.save();
+    // Increment download count
+    await PastPaper.findByIdAndUpdate(req.params.id, {
+      $inc: { downloadCount: 1 },
+    });
 
-    // Construct full file path on server
-    const relativePath = paper.fileUrl.startsWith('/') ? paper.fileUrl.substring(1) : paper.fileUrl;
-    const filePath = path.join(__dirname, '..', relativePath);
-
-    if (!fs.existsSync(filePath)) {
+    // Make sure a PDF URL exists
+    if (!paper.fileUrl) {
       res.status(404);
-      throw new Error('Requested PDF document file is missing on the server storage.');
+      throw new Error('PDF document URL is missing.');
     }
 
-    // Sanitize download filename
-    const downloadName = paper.fileName || `${paper.slug}.pdf`;
+    // Debug: show the stored PDF URL in backend terminal
+    console.log('DOWNLOAD URL:', paper.fileUrl);
 
-    res.download(filePath, downloadName, (err) => {
-      if (err && !res.headersSent) {
-        return next(err);
-      }
-    });
+    // Redirect user to the stored Cloudinary PDF
+    return res.redirect(paper.fileUrl);
   } catch (error) {
+    console.error('DOWNLOAD ERROR:', error.message);
     next(error);
   }
 };
@@ -160,60 +157,68 @@ const createPastPaper = async (req, res, next) => {
       status,
     } = req.body;
 
-    // Verify permission confirmation
-    const isPermissionConfirmed = permissionConfirmed === true || permissionConfirmed === 'true';
+    // Permission confirmation
+    const isPermissionConfirmed =
+      permissionConfirmed === true ||
+      permissionConfirmed === 'true';
+
     if (!isPermissionConfirmed) {
-      // Unlink uploaded file if permission is not confirmed
-      if (req.file) {
-        deleteStoredFile(req.file.path);
-      }
       res.status(400);
-      throw new Error('You must explicitly confirm that you have permission to distribute this file.');
+      throw new Error(
+        'You must explicitly confirm that you have permission to distribute this file.'
+      );
     }
 
     if (!title || !examType || !subject || !year || !medium) {
-      if (req.file) deleteStoredFile(req.file.path);
       res.status(400);
-      throw new Error('Please provide title, examType, subject, year, and medium.');
+      throw new Error(
+        'Please provide title, examType, subject, year, and medium.'
+      );
     }
 
-    if (!req.file && !req.body.fileUrl) {
+    if (!req.file) {
       res.status(400);
       throw new Error('Please upload a PDF document file.');
     }
 
-    // Auto-generate slug if not provided
+    // Generate slug
     const finalSlug = slug
-      ? slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-      : `${year}-${examType.toLowerCase()}-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${medium.toLowerCase()}-medium`
-          .toLowerCase()
-          .replace(/(^-|-$)/g, '');
+      ? slug
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+      : `${year}-${examType.toLowerCase()}-${subject
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')}-${medium.toLowerCase()}-medium`
+        .replace(/(^-|-$)/g, '');
 
-    // Check slug uniqueness
-    const existing = await PastPaper.findOne({ slug: finalSlug });
+    // Check duplicate slug
+    const existing = await PastPaper.findOne({
+      slug: finalSlug,
+    });
+
     if (existing) {
-      if (req.file) deleteStoredFile(req.file.path);
       res.status(400);
-      throw new Error(`Past paper with slug '${finalSlug}' already exists.`);
+      throw new Error(
+        `Past paper with slug '${finalSlug}' already exists.`
+      );
     }
 
-    // Determine storage fileUrl
-    let fileUrl = '';
-    let fileName = '';
-    let fileSize = 0;
+    // Cloudinary folder
+    const examFolder = ['ol', 'al', 'university'].includes(
+      examType.toLowerCase()
+    )
+      ? examType.toLowerCase()
+      : 'other';
 
-    if (req.file) {
-      const examFolder = ['ol', 'al', 'university'].includes(examType.toLowerCase())
-        ? examType.toLowerCase()
-        : 'ol';
-      fileUrl = `/uploads/past-papers/${examFolder}/${req.file.filename}`;
-      fileName = req.file.originalname;
-      fileSize = req.file.size;
-    } else {
-      fileUrl = req.body.fileUrl;
-      fileName = req.body.fileName || `${finalSlug}.pdf`;
-      fileSize = req.body.fileSize || 0;
-    }
+    const cloudinaryFolder = `edutools-lk/past-papers/${examFolder}`;
+
+    // Upload PDF to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(
+      req.file.buffer,
+      cloudinaryFolder,
+      req.file.originalname
+    );
 
     const paper = await PastPaper.create({
       title,
@@ -227,9 +232,10 @@ const createPastPaper = async (req, res, next) => {
       paperType: paperType || 'Past Paper',
       term: term || 'Final',
       description: description || '',
-      fileUrl,
-      fileName,
-      fileSize,
+      fileUrl: cloudinaryResult.secure_url,
+      cloudinaryPublicId: cloudinaryResult.public_id,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
       status: status || 'published',
       source: source || 'Official Exam Board',
       permissionConfirmed: true,
@@ -238,11 +244,10 @@ const createPastPaper = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Past paper uploaded successfully',
+      message: 'Past paper uploaded successfully to Cloudinary',
       data: paper,
     });
   } catch (error) {
-    if (req.file) deleteStoredFile(req.file.path);
     next(error);
   }
 };
@@ -253,34 +258,58 @@ const createPastPaper = async (req, res, next) => {
 const updatePastPaper = async (req, res, next) => {
   try {
     let paper = await PastPaper.findById(req.params.id);
+
     if (!paper) {
-      if (req.file) deleteStoredFile(req.file.path);
       res.status(404);
       throw new Error('Past paper not found');
     }
 
+    // Update slug if provided
     if (req.body.slug) {
-      req.body.slug = req.body.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      req.body.slug = req.body.slug
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
     }
 
-    // Handle new file upload if provided
+    // If a new PDF is uploaded
     if (req.file) {
-      // Unlink old file
-      deleteStoredFile(paper.fileUrl);
+      const examType = (
+        req.body.examType || paper.examType
+      ).toLowerCase();
 
-      const examType = req.body.examType || paper.examType;
-      const examFolder = ['ol', 'al', 'university'].includes(examType.toLowerCase())
-        ? examType.toLowerCase()
-        : 'ol';
-      req.body.fileUrl = `/uploads/past-papers/${examFolder}/${req.file.filename}`;
+      const examFolder = ['ol', 'al', 'university'].includes(examType)
+        ? examType
+        : 'other';
+
+      const cloudinaryFolder = `edutools-lk/past-papers/${examFolder}`;
+
+      // Upload new PDF first
+      const cloudinaryResult = await uploadToCloudinary(
+        req.file.buffer,
+        cloudinaryFolder,
+        req.file.originalname
+      );
+
+      // Delete old Cloudinary PDF after successful upload
+      if (paper.cloudinaryPublicId) {
+        await deleteStoredFile(paper.cloudinaryPublicId);
+      }
+
+      req.body.fileUrl = cloudinaryResult.secure_url;
+      req.body.cloudinaryPublicId = cloudinaryResult.public_id;
       req.body.fileName = req.file.originalname;
       req.body.fileSize = req.file.size;
     }
 
-    paper = await PastPaper.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    paper = await PastPaper.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
     res.status(200).json({
       success: true,
@@ -288,7 +317,6 @@ const updatePastPaper = async (req, res, next) => {
       data: paper,
     });
   } catch (error) {
-    if (req.file) deleteStoredFile(req.file.path);
     next(error);
   }
 };
@@ -299,14 +327,18 @@ const updatePastPaper = async (req, res, next) => {
 const deletePastPaper = async (req, res, next) => {
   try {
     const paper = await PastPaper.findById(req.params.id);
+
     if (!paper) {
       res.status(404);
       throw new Error('Past paper not found');
     }
 
-    // Delete file from storage
-    deleteStoredFile(paper.fileUrl);
+    // Delete PDF from Cloudinary
+    if (paper.cloudinaryPublicId) {
+      await deleteStoredFile(paper.cloudinaryPublicId);
+    }
 
+    // Delete database record
     await paper.deleteOne();
 
     res.status(200).json({
