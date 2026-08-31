@@ -129,6 +129,12 @@ app.use(errorHandler);
 // Port configuration
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`EduTools LK Backend server running on port ${PORT}`);
-});
+// Run as a normal server locally
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`EduTools LK Backend server running on port ${PORT}`);
+  });
+}
+
+// Export Express app for Vercel
+module.exports = app;
