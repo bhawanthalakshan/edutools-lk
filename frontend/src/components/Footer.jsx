@@ -9,7 +9,7 @@ const Footer = () => {
     <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-sm mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-          
+
           {/* Column 1: Brand Header & Tagline */}
           <div className="space-y-4 md:col-span-1">
             <Link to="/" className="flex items-center gap-3">
@@ -83,7 +83,15 @@ const Footer = () => {
         <div className="mt-12 pt-6 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 gap-4">
           <p>© {currentYear} EduTools LK. All rights reserved.</p>
           <p className="flex items-center gap-1">
-            Built with <FaHeart className="text-rose-500 text-xs inline" /> for Students & Learners
+            Developed by{' '}
+            <a
+              href="https://www.linkedin.com/in/bhawantha-lakshan-056481372/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-slate-300 hover:text-blue-400 transition-colors"
+            >
+              Bhawantha Lakshan
+            </a>
           </p>
         </div>
       </div>
