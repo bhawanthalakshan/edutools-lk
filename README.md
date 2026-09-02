@@ -72,18 +72,6 @@ edutools-lk/
 - **Node.js** (v18+ recommended)
 - **MongoDB** (Local instance `mongodb://localhost:27017/edutools-lk` or MongoDB Atlas URI)
 
-### Environment Variables (`backend/.env`)
-
-Create `backend/.env`:
-
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/edutools-lk
-JWT_SECRET=edutools_lk_secret_key_2026
-CLIENT_URL=http://localhost:3000
-```
-
----
 
 ## 🛠️ Step-by-Step Quick Start
 
@@ -98,9 +86,6 @@ npm install
 npm run seed
 ```
 
-> **Default Seed Admin Credentials:**
-> - **Email**: `admin@edutools.lk`
-> - **Password**: `adminpassword123`
 
 ### 2. Run Backend Server
 
