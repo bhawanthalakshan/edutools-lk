@@ -96,13 +96,37 @@ const pastPaperSchema = new mongoose.Schema(
       required: [true, 'Permission confirmation is required'],
       default: false,
     },
+    // Relational Hierarchy Fields (Optional / Linked)
+    subjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject',
+      default: null,
+    },
+    universityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'University',
+      default: null,
+    },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      default: null,
+    },
+    moduleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Module',
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Text Index for full-text search
+// Indexes for fast server-side filtering & search
 pastPaperSchema.index({ title: 'text', subject: 'text', description: 'text' });
+pastPaperSchema.index({ examType: 1, status: 1 });
+pastPaperSchema.index({ subjectId: 1, year: -1 });
+pastPaperSchema.index({ universityId: 1, courseId: 1, moduleId: 1 });
 
 module.exports = mongoose.model('PastPaper', pastPaperSchema);

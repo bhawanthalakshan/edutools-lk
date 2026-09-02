@@ -19,8 +19,14 @@ import NotFound from './pages/NotFound';
 const EducationStream = lazy(() => import('./pages/education/EducationStream'));
 const SubjectDetail = lazy(() => import('./pages/education/SubjectDetail'));
 
-// Lazy-Loaded Past Papers Pages
+// Lazy-Loaded Hierarchical Past Papers Pages
 const PastPapersHub = lazy(() => import('./pages/past-papers/PastPapersHub'));
+const OLPapersPage = lazy(() => import('./pages/past-papers/OLPapersPage'));
+const OLSubjectPage = lazy(() => import('./pages/past-papers/OLSubjectPage'));
+const ALPapersPage = lazy(() => import('./pages/past-papers/ALPapersPage'));
+const ALSubjectPage = lazy(() => import('./pages/past-papers/ALSubjectPage'));
+const UniversityPapersPage = lazy(() => import('./pages/past-papers/UniversityPapersPage'));
+const UniversityDetailPage = lazy(() => import('./pages/past-papers/UniversityDetailPage'));
 const PastPaperDetail = lazy(() => import('./pages/past-papers/PastPaperDetail'));
 
 // Lazy-Loaded Article, Search & Info Pages
@@ -69,11 +75,25 @@ function App() {
               <Route path="education/:streamKey" element={<EducationStream />} />
               <Route path="education/:level/:subjectKey" element={<SubjectDetail />} />
 
-              {/* Past Papers Routes */}
+              {/* Past Papers Hierarchical Routes */}
               <Route path="past-papers" element={<PastPapersHub />} />
-              <Route path="past-papers/ol" element={<PastPapersHub />} />
-              <Route path="past-papers/al" element={<PastPapersHub />} />
-              <Route path="past-papers/university" element={<PastPapersHub />} />
+              
+              {/* O/L Browsing Routes */}
+              <Route path="past-papers/ol" element={<OLPapersPage />} />
+              <Route path="past-papers/ol/:subjectSlug" element={<OLSubjectPage />} />
+
+              {/* A/L Browsing Routes */}
+              <Route path="past-papers/al" element={<ALPapersPage />} />
+              <Route path="past-papers/al/:subjectSlug" element={<ALSubjectPage />} />
+
+              {/* University Browsing Routes */}
+              <Route path="past-papers/university" element={<UniversityPapersPage />} />
+              <Route path="past-papers/university/:uniSlug" element={<UniversityDetailPage />} />
+              <Route path="past-papers/university/:uniSlug/:courseSlug" element={<UniversityDetailPage />} />
+              <Route path="past-papers/university/:uniSlug/:courseSlug/:moduleSlug" element={<UniversityDetailPage />} />
+
+              {/* Individual Paper Detail Pages */}
+              <Route path="past-papers/detail/:slug" element={<PastPaperDetail />} />
               <Route path="past-papers/:slug" element={<PastPaperDetail />} />
 
               {/* Tools Routes */}

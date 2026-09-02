@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { FaFilePdf, FaDownload, FaArrowLeft, FaCalendarAlt, FaLanguage, FaFileAlt, FaEye, FaShieldAlt } from 'react-icons/fa';
 import Seo from '../../components/Seo';
+import Breadcrumbs from '../../components/Breadcrumbs';
 import PastPaperCard from '../../components/PastPaperCard';
 import AdPlaceholder from '../../components/AdPlaceholder';
-import { getPastPaperBySlug, getPastPapers, triggerPastPaperDownload } from '../../services/pastPaperService';
+import { getPastPaperBySlug, triggerPastPaperDownload } from '../../services/pastPaperService';
 
 const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return 'PDF Document';
@@ -29,16 +30,7 @@ const PastPaperDetail = () => {
       .then((res) => {
         const item = res.data;
         setPaper(item);
-
-        // Fetch related papers from same subject or exam level
-        if (item) {
-          getPastPapers({ examType: item.examType, limit: 3 })
-            .then((relRes) => {
-              const filtered = (relRes.data || []).filter((p) => p._id !== item._id);
-              setRelatedPapers(filtered.slice(0, 3));
-            })
-            .catch((err) => console.error(err));
-        }
+        if (res.related) setRelatedPapers(res.related);
       })
       .catch((err) => {
         console.error(err);
@@ -75,28 +67,31 @@ const PastPaperDetail = () => {
     setPaper((prev) => ({ ...prev, downloadCount: prev.downloadCount + 1 }));
   };
 
-  const uploadDateStr = paper.createdAt
-    ? new Date(paper.createdAt).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : '';
+  const levelPath = paper.examType === 'OL' ? '/past-papers/ol' : paper.examType === 'AL' ? '/past-papers/al' : '/past-papers/university';
 
   return (
-    <div className="py-12 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-8 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
       <Seo
-        title={`${paper.title} | EduTools LK`}
-        description={`Download ${paper.title} PDF. Exam: ${paper.examType}, Subject: ${paper.subject}, Year: ${paper.year}, Medium: ${paper.medium}.`}
+        title={`${paper.title} PDF Download`}
+        description={`Download the ${paper.year} ${paper.examType} ${paper.subject} ${paper.paperType} PDF in ${paper.medium} medium from EduTools LK.`}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'DigitalDocument',
+          name: paper.title,
+          description: paper.description || `${paper.title} PDF Document`,
+          encodingFormat: 'application/pdf',
+          fileFormat: 'application/pdf',
+          url: paper.fileUrl,
+        }}
       />
 
-      {/* Back Link */}
-      <Link
-        to="/past-papers"
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors"
-      >
-        <FaArrowLeft className="text-[10px]" /> Back to All Past Papers
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: 'Past Papers', url: '/past-papers' },
+          { label: `${paper.examType} Papers`, url: levelPath },
+          { label: paper.title },
+        ]}
+      />
 
       {/* Main Document Detail Card */}
       <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-md space-y-8">
@@ -175,7 +170,7 @@ const PastPaperDetail = () => {
         {/* Description Body */}
         {paper.description && (
           <div className="space-y-2 pt-2">
-            <h2 className="text-sm font-bold text-slate-900">Document Information & Syllabus Scope</h2>
+            <h2 className="text-sm font-bold text-slate-900">Document Details</h2>
             <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
               {paper.description}
             </p>
@@ -196,7 +191,6 @@ const PastPaperDetail = () => {
 
       </div>
 
-      {/* Non-intrusive Ad Unit (Seperated cleanly from download button) */}
       <AdPlaceholder type="banner" />
 
       {/* Related Papers Section */}

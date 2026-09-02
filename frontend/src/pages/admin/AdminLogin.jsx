@@ -33,7 +33,7 @@ const AdminLogin = () => {
       <Seo title="Admin Login" description="Secure access portal for EduTools LK administrators." />
 
       <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-xl space-y-6">
-        
+
         {/* Header */}
         <div className="text-center space-y-2">
           <Link to="/" className="inline-flex items-center gap-3 group">
@@ -66,7 +66,7 @@ const AdminLogin = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@edutools.lk"
+                placeholder="Enter Your Email..."
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-500"
               />
               <FaEnvelope className="absolute left-3.5 top-3.5 text-slate-400 text-xs" />
@@ -94,9 +94,8 @@ const AdminLogin = () => {
           <button
             type="submit"
             disabled={submitting}
-            className={`w-full py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-2xl text-xs shadow-md transition-all ${
-              submitting ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
-            }`}
+            className={`w-full py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-2xl text-xs shadow-md transition-all ${submitting ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
+              }`}
           >
             {submitting ? 'Authenticating...' : 'Sign In to Dashboard'}
           </button>

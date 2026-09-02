@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
+import { SITE_CONFIG, getCanonicalUrl } from '../config/seoConfig';
 
-const Seo = ({ title, description, image, type = 'website' }) => {
+const Seo = ({ title, description, image, type = 'website', jsonLd = null }) => {
   useEffect(() => {
-    const baseTitle = 'EduTools LK';
+    const baseTitle = SITE_CONFIG.name;
     const tagline = 'Learn Smart. Achieve More.';
-    const fullTitle = title ? `${title} | ${baseTitle} - ${tagline}` : `${baseTitle} - ${tagline}`;
-    const defaultDesc = 'EduTools LK is an educational resources and free online tools platform for students and learners in Sri Lanka.';
-    const finalDesc = description || defaultDesc;
-    const currentUrl = window.location.href;
-    const defaultOgImage = 'https://edutools.lk/favicon.svg';
-    const finalOgImage = image || defaultOgImage;
+    const fullTitle = title ? `${title} | ${baseTitle}` : `${baseTitle} - ${tagline}`;
+    const finalDesc = description || SITE_CONFIG.defaultDescription;
+    const canonicalUrl = getCanonicalUrl(window.location.pathname);
+    const finalOgImage = image || SITE_CONFIG.defaultOgImage;
 
     // 1. Document Title
     document.title = fullTitle;
@@ -25,26 +24,46 @@ const Seo = ({ title, description, image, type = 'website' }) => {
       element.setAttribute('content', contentValue);
     };
 
-    // 2. Standard Meta Description
+    // 2. Standard Meta Description & Robots
     setMetaTag('meta[name="description"]', 'name', 'description', finalDesc);
+    setMetaTag('meta[name="robots"]', 'name', 'robots', 'index, follow');
 
     // 3. Open Graph Tags
     setMetaTag('meta[property="og:title"]', 'property', 'og:title', fullTitle);
     setMetaTag('meta[property="og:description"]', 'property', 'og:description', finalDesc);
     setMetaTag('meta[property="og:type"]', 'property', 'og:type', type);
-    setMetaTag('meta[property="og:url"]', 'property', 'og:url', currentUrl);
+    setMetaTag('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
     setMetaTag('meta[property="og:image"]', 'property', 'og:image', finalOgImage);
     setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', baseTitle);
 
-    // 4. Canonical URL
+    // 4. Twitter / X Card Tags
+    setMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary_large_image');
+    setMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', fullTitle);
+    setMetaTag('meta[name="twitter:description"]', 'name', 'twitter:description', finalDesc);
+    setMetaTag('meta[name="twitter:image"]', 'name', 'twitter:image', finalOgImage);
+
+    // 5. Canonical URL
     let canonicalLink = document.querySelector('link[rel="canonical"]');
     if (!canonicalLink) {
       canonicalLink = document.createElement('link');
       canonicalLink.setAttribute('rel', 'canonical');
       document.head.appendChild(canonicalLink);
     }
-    canonicalLink.setAttribute('href', currentUrl);
-  }, [title, description, image, type]);
+    canonicalLink.setAttribute('href', canonicalUrl);
+
+    // 6. JSON-LD Structured Data
+    let scriptTag = document.querySelector('script[type="application/ld+json"]');
+    if (jsonLd) {
+      if (!scriptTag) {
+        scriptTag = document.createElement('script');
+        scriptTag.setAttribute('type', 'application/ld+json');
+        document.head.appendChild(scriptTag);
+      }
+      scriptTag.textContent = JSON.stringify(jsonLd);
+    } else if (scriptTag) {
+      scriptTag.remove();
+    }
+  }, [title, description, image, type, jsonLd]);
 
   return null;
 };

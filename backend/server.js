@@ -17,6 +17,9 @@ const articleRoutes = require('./routes/articleRoutes');
 const toolRoutes = require('./routes/toolRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const pastPaperRoutes = require('./routes/pastPaperRoutes');
+const subjectRoutes = require('./routes/subjectRoutes');
+const universityRoutes = require('./routes/universityRoutes');
+const sitemapRoutes = require('./routes/sitemapRoutes');
 const dns = require("dns");
 // Middleware Imports
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
@@ -103,6 +106,9 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/tools', toolRoutes);
 app.use('/api/past-papers', pastPaperRoutes);
+app.use('/api/subjects', subjectRoutes);
+app.use('/api/universities', universityRoutes);
+app.use('/sitemap.xml', sitemapRoutes);
 
 // Root route
 app.get('/', (req, res) => {

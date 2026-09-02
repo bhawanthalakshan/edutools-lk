@@ -1,19 +1,26 @@
 const PastPaper = require('../models/PastPaper');
-const {
-  uploadToCloudinary,
-  deleteStoredFile,
-} = require('../utils/storage');
+const Subject = require('../models/Subject');
+const University = require('../models/University');
+const Course = require('../models/Course');
+const Module = require('../models/Module');
+const { uploadToCloudinary, deleteStoredFile } = require('../utils/storage');
 
-// @desc    Get past papers with filtering, search & pagination
+// @desc    Get past papers with server-side filtering, search & pagination
 // @route   GET /api/past-papers
 // @access  Public
 const getPastPapers = async (req, res, next) => {
   try {
     const {
       examType,
-      level,
-      stream,
       subject,
+      subjectSlug,
+      subjectId,
+      universitySlug,
+      universityId,
+      courseSlug,
+      courseId,
+      moduleSlug,
+      moduleId,
       year,
       medium,
       paperType,
@@ -27,15 +34,54 @@ const getPastPapers = async (req, res, next) => {
 
     const query = {};
 
-    // Filter by status (unless admin requests all)
+    // Filter by published status unless admin explicitly requests all
     if (all !== 'true') {
       query.status = 'published';
     }
 
-    if (examType) query.examType = examType.toUpperCase();
-    if (level) query.level = { $regex: level, $options: 'i' };
-    if (stream) query.stream = { $regex: stream, $options: 'i' };
-    if (subject) query.subject = { $regex: subject, $options: 'i' };
+    if (examType) {
+      query.examType = examType.toUpperCase();
+    }
+
+    // Resolve subject by ID, slug, or name regex
+    if (subjectId) {
+      query.subjectId = subjectId;
+    } else if (subjectSlug) {
+      const subjectDoc = await Subject.findOne({
+        slug: subjectSlug.toLowerCase(),
+        ...(examType ? { examType: examType.toUpperCase() } : {}),
+      });
+      if (subjectDoc) {
+        query.$or = [
+          { subjectId: subjectDoc._id },
+          { subject: { $regex: new RegExp(`^${subjectDoc.name}$`, 'i') } },
+        ];
+      } else {
+        query.subject = { $regex: subjectSlug.replace(/-/g, ' '), $options: 'i' };
+      }
+    } else if (subject) {
+      query.subject = { $regex: subject, $options: 'i' };
+    }
+
+    // Resolve University / Course / Module filters
+    if (universityId) query.universityId = universityId;
+    if (universitySlug) {
+      const uniDoc = await University.findOne({ slug: universitySlug.toLowerCase() });
+      if (uniDoc) query.universityId = uniDoc._id;
+    }
+
+    if (courseId) query.courseId = courseId;
+    if (courseSlug) {
+      const courseDoc = await Course.findOne({ slug: courseSlug.toLowerCase() });
+      if (courseDoc) query.courseId = courseDoc._id;
+    }
+
+    if (moduleId) query.moduleId = moduleId;
+    if (moduleSlug) {
+      const moduleDoc = await Module.findOne({ slug: moduleSlug.toLowerCase() });
+      if (moduleDoc) query.moduleId = moduleDoc._id;
+    }
+
     if (year) query.year = Number(year);
     if (medium) query.medium = { $regex: medium, $options: 'i' };
     if (paperType) query.paperType = { $regex: paperType, $options: 'i' };
@@ -43,10 +89,11 @@ const getPastPapers = async (req, res, next) => {
 
     // Search filter across title, subject, description
     if (search) {
+      const searchRegex = new RegExp(search, 'i');
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { subject: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: searchRegex },
+        { subject: searchRegex },
+        { description: searchRegex },
       ];
     }
 
@@ -56,6 +103,10 @@ const getPastPapers = async (req, res, next) => {
 
     const totalPapers = await PastPaper.countDocuments(query);
     const papers = await PastPaper.find(query)
+      .populate('subjectId', 'name slug icon')
+      .populate('universityId', 'name slug logo')
+      .populate('courseId', 'name slug')
+      .populate('moduleId', 'name slug code')
       .sort(sort)
       .skip(skip)
       .limit(limitNum);
@@ -78,23 +129,82 @@ const getPastPapers = async (req, res, next) => {
   }
 };
 
+// @desc    Get aggregate stats for Admin & Landing Hub
+// @route   GET /api/past-papers/stats
+// @access  Public
+const getPastPaperStats = async (req, res, next) => {
+  try {
+    const totalPapers = await PastPaper.countDocuments({ status: 'published' });
+    const olPapers = await PastPaper.countDocuments({ examType: 'OL', status: 'published' });
+    const alPapers = await PastPaper.countDocuments({ examType: 'AL', status: 'published' });
+    const universityPapers = await PastPaper.countDocuments({ examType: 'UNIVERSITY', status: 'published' });
+
+    const olSubjectsCount = await Subject.countDocuments({ examType: 'OL', active: true });
+    const alSubjectsCount = await Subject.countDocuments({ examType: 'AL', active: true });
+    const universityCount = await University.countDocuments({ active: true });
+
+    const downloadsAggregate = await PastPaper.aggregate([
+      { $group: { _id: null, totalDownloads: { $sum: '$downloadCount' } } },
+    ]);
+
+    const totalDownloads = downloadsAggregate[0]?.totalDownloads || 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalPapers,
+        olPapers,
+        alPapers,
+        universityPapers,
+        olSubjectsCount,
+        alSubjectsCount,
+        universityCount,
+        totalDownloads,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get single past paper by slug
-// @route   GET /api/past-papers/:slug
+// @route   GET /api/past-papers/slug/:slug
 // @access  Public
 const getPastPaperBySlug = async (req, res, next) => {
   try {
     const paper = await PastPaper.findOne({
       slug: req.params.slug.toLowerCase(),
-    });
+    })
+      .populate('subjectId', 'name slug icon')
+      .populate('universityId', 'name slug logo')
+      .populate('courseId', 'name slug')
+      .populate('moduleId', 'name slug code');
 
     if (!paper) {
       res.status(404);
       throw new Error(`Past paper with slug '${req.params.slug}' not found`);
     }
 
+    // Fetch up to 4 related papers from same subject / examType
+    const relatedQuery = {
+      _id: { $ne: paper._id },
+      examType: paper.examType,
+      status: 'published',
+    };
+    if (paper.subjectId) {
+      relatedQuery.subjectId = paper.subjectId;
+    } else {
+      relatedQuery.subject = paper.subject;
+    }
+
+    const relatedPapers = await PastPaper.find(relatedQuery)
+      .limit(4)
+      .sort({ year: -1 });
+
     res.status(200).json({
       success: true,
       data: paper,
+      related: relatedPapers,
     });
   } catch (error) {
     next(error);
@@ -118,19 +228,13 @@ const downloadPastPaper = async (req, res, next) => {
       $inc: { downloadCount: 1 },
     });
 
-    // Make sure a PDF URL exists
     if (!paper.fileUrl) {
       res.status(404);
       throw new Error('PDF document URL is missing.');
     }
 
-    // Debug: show the stored PDF URL in backend terminal
-    console.log('DOWNLOAD URL:', paper.fileUrl);
-
-    // Redirect user to the stored Cloudinary PDF
     return res.redirect(paper.fileUrl);
   } catch (error) {
-    console.error('DOWNLOAD ERROR:', error.message);
     next(error);
   }
 };
@@ -147,6 +251,10 @@ const createPastPaper = async (req, res, next) => {
       level,
       stream,
       subject,
+      subjectId,
+      universityId,
+      courseId,
+      moduleId,
       year,
       medium,
       paperType,
@@ -157,10 +265,8 @@ const createPastPaper = async (req, res, next) => {
       status,
     } = req.body;
 
-    // Permission confirmation
     const isPermissionConfirmed =
-      permissionConfirmed === true ||
-      permissionConfirmed === 'true';
+      permissionConfirmed === true || permissionConfirmed === 'true';
 
     if (!isPermissionConfirmed) {
       res.status(400);
@@ -181,33 +287,26 @@ const createPastPaper = async (req, res, next) => {
       throw new Error('Please upload a PDF document file.');
     }
 
-    // Generate slug
+    // Generate clean slug
     const finalSlug = slug
       ? slug
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '')
       : `${year}-${examType.toLowerCase()}-${subject
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')}-${medium.toLowerCase()}-medium`
-        .replace(/(^-|-$)/g, '');
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')}-${medium.toLowerCase()}-medium`
+          .replace(/(^-|-$)/g, '');
 
     // Check duplicate slug
-    const existing = await PastPaper.findOne({
-      slug: finalSlug,
-    });
-
+    const existing = await PastPaper.findOne({ slug: finalSlug });
     if (existing) {
       res.status(400);
-      throw new Error(
-        `Past paper with slug '${finalSlug}' already exists.`
-      );
+      throw new Error(`Past paper with slug '${finalSlug}' already exists.`);
     }
 
     // Cloudinary folder
-    const examFolder = ['ol', 'al', 'university'].includes(
-      examType.toLowerCase()
-    )
+    const examFolder = ['ol', 'al', 'university'].includes(examType.toLowerCase())
       ? examType.toLowerCase()
       : 'other';
 
@@ -220,6 +319,18 @@ const createPastPaper = async (req, res, next) => {
       req.file.originalname
     );
 
+    // Resolve subjectId if missing
+    let resolvedSubjectId = subjectId || null;
+    if (!resolvedSubjectId && ['OL', 'AL'].includes(examType.toUpperCase())) {
+      const subjectDoc = await Subject.findOne({
+        examType: examType.toUpperCase(),
+        name: { $regex: new RegExp(`^${subject}$`, 'i') },
+      });
+      if (subjectDoc) {
+        resolvedSubjectId = subjectDoc._id;
+      }
+    }
+
     const paper = await PastPaper.create({
       title,
       slug: finalSlug,
@@ -227,6 +338,10 @@ const createPastPaper = async (req, res, next) => {
       level: level || examType,
       stream: stream || 'General',
       subject,
+      subjectId: resolvedSubjectId,
+      universityId: universityId || null,
+      courseId: courseId || null,
+      moduleId: moduleId || null,
       year: Number(year),
       medium,
       paperType: paperType || 'Past Paper',
@@ -252,7 +367,7 @@ const createPastPaper = async (req, res, next) => {
   }
 };
 
-// @desc    Update past paper metadata or file
+// @desc    Update past paper metadata or file (SAFE CLOUDINARY FILE SWAP SEQUENCE)
 // @route   PUT /api/past-papers/:id
 // @access  Private/Admin
 const updatePastPaper = async (req, res, next) => {
@@ -264,7 +379,8 @@ const updatePastPaper = async (req, res, next) => {
       throw new Error('Past paper not found');
     }
 
-    // Update slug if provided
+    const oldCloudinaryPublicId = paper.cloudinaryPublicId;
+
     if (req.body.slug) {
       req.body.slug = req.body.slug
         .toLowerCase()
@@ -272,44 +388,39 @@ const updatePastPaper = async (req, res, next) => {
         .replace(/(^-|-$)/g, '');
     }
 
-    // If a new PDF is uploaded
+    // SAFE CLOUDINARY REPLACEMENT: Upload new file first!
     if (req.file) {
-      const examType = (
-        req.body.examType || paper.examType
-      ).toLowerCase();
-
+      const examType = (req.body.examType || paper.examType).toLowerCase();
       const examFolder = ['ol', 'al', 'university'].includes(examType)
         ? examType
         : 'other';
 
       const cloudinaryFolder = `edutools-lk/past-papers/${examFolder}`;
 
-      // Upload new PDF first
+      // Step 1: Upload new file to Cloudinary first
       const cloudinaryResult = await uploadToCloudinary(
         req.file.buffer,
         cloudinaryFolder,
         req.file.originalname
       );
 
-      // Delete old Cloudinary PDF after successful upload
-      if (paper.cloudinaryPublicId) {
-        await deleteStoredFile(paper.cloudinaryPublicId);
-      }
-
+      // Step 2: Attach new file URLs to update body
       req.body.fileUrl = cloudinaryResult.secure_url;
       req.body.cloudinaryPublicId = cloudinaryResult.public_id;
       req.body.fileName = req.file.originalname;
       req.body.fileSize = req.file.size;
     }
 
-    paper = await PastPaper.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    // Step 3: Update MongoDB record
+    paper = await PastPaper.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
+    // Step 4: ONLY after DB update succeeds, destroy the old Cloudinary file
+    if (req.file && oldCloudinaryPublicId && oldCloudinaryPublicId !== paper.cloudinaryPublicId) {
+      await deleteStoredFile(oldCloudinaryPublicId);
+    }
 
     res.status(200).json({
       success: true,
@@ -321,7 +432,7 @@ const updatePastPaper = async (req, res, next) => {
   }
 };
 
-// @desc    Delete past paper & remove local file
+// @desc    Delete past paper & remove Cloudinary file
 // @route   DELETE /api/past-papers/:id
 // @access  Private/Admin
 const deletePastPaper = async (req, res, next) => {
@@ -333,12 +444,10 @@ const deletePastPaper = async (req, res, next) => {
       throw new Error('Past paper not found');
     }
 
-    // Delete PDF from Cloudinary
     if (paper.cloudinaryPublicId) {
       await deleteStoredFile(paper.cloudinaryPublicId);
     }
 
-    // Delete database record
     await paper.deleteOne();
 
     res.status(200).json({
@@ -377,6 +486,7 @@ const togglePastPaperStatus = async (req, res, next) => {
 
 module.exports = {
   getPastPapers,
+  getPastPaperStats,
   getPastPaperBySlug,
   downloadPastPaper,
   createPastPaper,

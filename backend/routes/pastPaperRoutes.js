@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getPastPapers,
+  getPastPaperStats,
   getPastPaperBySlug,
   downloadPastPaper,
   createPastPaper,
@@ -16,6 +17,9 @@ const { uploadPdf } = require('../utils/storage');
 router.route('/')
   .get(getPastPapers)
   .post(protect, admin, uploadPdf.single('file'), createPastPaper);
+
+router.route('/stats')
+  .get(getPastPaperStats);
 
 router.route('/slug/:slug')
   .get(getPastPaperBySlug);

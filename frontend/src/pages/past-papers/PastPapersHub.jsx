@@ -1,283 +1,239 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
-import { FaFilePdf, FaSearch, FaFilter, FaRedo } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { 
+  FaFilePdf, 
+  FaGraduationCap, 
+  FaBookReader, 
+  FaUniversity, 
+  FaArrowRight, 
+  FaClock, 
+  FaDownload, 
+  FaCheckCircle 
+} from 'react-icons/fa';
 import Seo from '../../components/Seo';
-import PastPaperCard from '../../components/PastPaperCard';
-import Pagination from '../../components/Pagination';
+import Breadcrumbs from '../../components/Breadcrumbs';
 import AdPlaceholder from '../../components/AdPlaceholder';
-import { getPastPapers } from '../../services/pastPaperService';
+import PastPaperCard from '../../components/PastPaperCard';
+import { getPastPapers, getPastPaperStats } from '../../services/pastPaperService';
 
 const PastPapersHub = () => {
-  const location = useLocation();
-
-  // Detect pre-filtered level from route pathname (/past-papers/ol, /past-papers/al, /past-papers/university)
-  const getInitialExamType = () => {
-    if (location.pathname.includes('/past-papers/ol')) return 'OL';
-    if (location.pathname.includes('/past-papers/al')) return 'AL';
-    if (location.pathname.includes('/past-papers/university')) return 'UNIVERSITY';
-    return '';
-  };
-
-  const [examType, setExamType] = useState(getInitialExamType());
-  const [stream, setStream] = useState('');
-  const [subject, setSubject] = useState('');
-  const [year, setYear] = useState('');
-  const [medium, setMedium] = useState('');
-  const [paperType, setPaperType] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const [papers, setPapers] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+  const [stats, setStats] = useState({
+    totalPapers: 0,
+    olPapers: 0,
+    alPapers: 0,
+    universityPapers: 0,
+    olSubjectsCount: 0,
+    alSubjectsCount: 0,
+    universityCount: 0,
+    totalDownloads: 0,
+  });
+  const [recentPapers, setRecentPapers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Sync route changes with examType state
-  useEffect(() => {
-    setExamType(getInitialExamType());
-    setCurrentPage(1);
-  }, [location.pathname]);
-
-  // Fetch Past Papers on filter/page change
   useEffect(() => {
     setLoading(true);
-    getPastPapers({
-      examType,
-      stream,
-      subject,
-      year,
-      medium,
-      paperType,
-      search: searchQuery,
-      page: currentPage,
-      limit: 9,
-    })
-      .then((res) => {
-        setPapers(res.data || []);
-        if (res.pagination) {
-          setTotalPages(res.pagination.totalPages || 1);
-          setTotalCount(res.pagination.totalPapers || 0);
-        }
-      })
-      .catch((err) => console.error('Failed to fetch past papers:', err))
-      .finally(() => setLoading(false));
-  }, [examType, stream, subject, year, medium, paperType, searchQuery, currentPage]);
-
-  const handleClearFilters = () => {
-    setExamType('');
-    setStream('');
-    setSubject('');
-    setYear('');
-    setMedium('');
-    setPaperType('');
-    setSearchQuery('');
-    setCurrentPage(1);
-  };
+    Promise.all([
+      getPastPaperStats().catch(() => null),
+      getPastPapers({ limit: 6, sort: '-createdAt' }).catch(() => ({ data: [] })),
+    ]).then(([statsRes, recentRes]) => {
+      if (statsRes?.data) setStats(statsRes.data);
+      if (recentRes?.data) setRecentPapers(recentRes.data);
+    }).finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
       <Seo
-        title="Past Papers & Study Resources"
-        description="Find and download free Sri Lankan G.C.E. O/L, A/L, and University past papers, model papers, and marking schemes."
+        title="Past Papers & Marking Schemes - G.C.E. O/L, A/L & University"
+        description="Download free Sri Lankan G.C.E. O/L, G.C.E. A/L, and University past papers, model papers, and marking schemes in Sinhala, Tamil, and English mediums."
       />
 
-      {/* Hero Banner Header */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-950 p-8 sm:p-12 rounded-3xl text-white shadow-xl space-y-4 relative overflow-hidden">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm text-blue-300">
-            <FaFilePdf className="text-3xl" />
-          </div>
-          <span className="text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-500/20 px-3 py-1 rounded-lg">
-            Free PDF Downloads
-          </span>
+      <Breadcrumbs items={[{ label: 'Past Papers' }]} />
+
+      {/* Hero Header */}
+      <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-8 sm:p-14 rounded-3xl text-white shadow-2xl space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+          <FaCheckCircle className="text-blue-400" />
+          <span>Verified Exam Papers Database</span>
         </div>
 
         <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-          Past Papers & Study Resources
+          Sri Lankan Past Papers Library
         </h1>
-        <p className="text-sm sm:text-base text-blue-100/90 max-w-2xl leading-relaxed">
-          Find and download official G.C.E. O/L, G.C.E. A/L, and University past papers, model question sets, and revision papers across Sinhala, Tamil, and English mediums.
+        <p className="text-sm sm:text-base text-slate-300 max-w-3xl leading-relaxed">
+          Access high-quality PDF downloads of past examination question papers, marking schemes, and model papers for Ordinary Level, Advanced Level, and University courses.
         </p>
 
-        {/* Quick Level Switch Pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-white/10">
-          <Link
-            to="/past-papers"
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              examType === '' ? 'bg-white text-blue-900 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            All Levels
-          </Link>
-          <Link
-            to="/past-papers/ol"
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              examType === 'OL' ? 'bg-white text-blue-900 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            O/L Papers
-          </Link>
-          <Link
-            to="/past-papers/al"
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              examType === 'AL' ? 'bg-white text-blue-900 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            A/L Papers
-          </Link>
-          <Link
-            to="/past-papers/university"
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              examType === 'UNIVERSITY' ? 'bg-white text-blue-900 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            University Papers
-          </Link>
+        {/* Aggregate Stats Summary */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/10">
+          <div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-blue-400">{stats.totalPapers}+</div>
+            <div className="text-xs text-slate-400 font-medium">Total Past Papers</div>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400">{stats.olSubjectsCount + stats.alSubjectsCount}+</div>
+            <div className="text-xs text-slate-400 font-medium">Exam Subjects</div>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-purple-400">{stats.universityCount || 3}+</div>
+            <div className="text-xs text-slate-400 font-medium">Universities</div>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-400">{stats.totalDownloads}+</div>
+            <div className="text-xs text-slate-400 font-medium">Downloads Serviced</div>
+          </div>
         </div>
       </div>
 
-      {/* Filter Control Panel */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-            <FaFilter className="text-blue-600" />
-            <span>Filter & Search Past Papers</span>
-            <span className="text-slate-400 font-normal">({totalCount} papers found)</span>
-          </div>
-
-          <button
-            onClick={handleClearFilters}
-            className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1.5 self-start sm:self-auto"
-          >
-            <FaRedo className="text-[10px]" /> Clear All Filters
-          </button>
+      {/* 3 Main Category Cards (O/L, A/L, University) */}
+      <div className="space-y-4">
+        <div className="text-center sm:text-left space-y-1">
+          <h2 className="text-2xl font-bold text-slate-900">Browse Exam Levels</h2>
+          <p className="text-xs text-slate-500">Select an academic level to browse subjects and paper archives.</p>
         </div>
 
-        {/* Filter Dropdowns Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          
-          {/* Search Query Input */}
-          <div className="lg:col-span-2 relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search by subject or title..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-            />
-            <FaSearch className="absolute left-3 top-3 text-slate-400 text-xs" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Card 1: O/L */}
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-6 group">
+            <div className="space-y-4">
+              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <FaBookReader />
+              </div>
+              <div>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
+                  Secondary Education
+                </span>
+                <h3 className="text-2xl font-extrabold text-slate-900 mt-2">O/L Past Papers</h3>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  G.C.E. Ordinary Level question papers for Mathematics, Science, ICT, Languages, and History across English, Sinhala, and Tamil mediums.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>{stats.olPapers || 0} Papers Available</span>
+                <span>{stats.olSubjectsCount || 8}+ Subjects</span>
+              </div>
+
+              <Link
+                to="/past-papers/ol"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all group-hover:gap-3"
+              >
+                <span>View O/L Papers</span>
+                <FaArrowRight className="text-[10px]" />
+              </Link>
+            </div>
           </div>
 
-          {/* Exam Type */}
-          <select
-            value={examType}
-            onChange={(e) => {
-              setExamType(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="">All Exam Levels</option>
-            <option value="OL">G.C.E. O/L</option>
-            <option value="AL">G.C.E. A/L</option>
-            <option value="UNIVERSITY">University</option>
-          </select>
+          {/* Card 2: A/L */}
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-6 group">
+            <div className="space-y-4">
+              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <FaGraduationCap />
+              </div>
+              <div>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
+                  Advanced Level
+                </span>
+                <h3 className="text-2xl font-extrabold text-slate-900 mt-2">A/L Past Papers</h3>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  G.C.E. Advanced Level examination papers for Physical Science, Biological Science, Commerce, Technology, and Arts streams.
+                </p>
+              </div>
+            </div>
 
-          {/* Medium */}
-          <select
-            value={medium}
-            onChange={(e) => {
-              setMedium(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="">All Mediums</option>
-            <option value="English">English Medium</option>
-            <option value="Sinhala">Sinhala Medium</option>
-            <option value="Tamil">Tamil Medium</option>
-          </select>
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>{stats.alPapers || 0} Papers Available</span>
+                <span>{stats.alSubjectsCount || 11}+ Subjects</span>
+              </div>
 
-          {/* Paper Type */}
-          <select
-            value={paperType}
-            onChange={(e) => {
-              setPaperType(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="">All Paper Types</option>
-            <option value="Past Paper">Past Paper</option>
-            <option value="Model Paper">Model Paper</option>
-            <option value="Term Test">Term Test</option>
-            <option value="Revision Paper">Revision Paper</option>
-          </select>
+              <Link
+                to="/past-papers/al"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all group-hover:gap-3"
+              >
+                <span>View A/L Papers</span>
+                <FaArrowRight className="text-[10px]" />
+              </Link>
+            </div>
+          </div>
 
-          {/* Year */}
-          <select
-            value={year}
-            onChange={(e) => {
-              setYear(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="">All Years</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-            <option value="2020">2020</option>
-          </select>
+          {/* Card 3: University */}
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-6 group">
+            <div className="space-y-4">
+              <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <FaUniversity />
+              </div>
+              <div>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50 px-2.5 py-1 rounded-md">
+                  Higher Education
+                </span>
+                <h3 className="text-2xl font-extrabold text-slate-900 mt-2">University Papers</h3>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  Undergraduate semester papers and exam resources organized by university, degree course, and specific module code.
+                </p>
+              </div>
+            </div>
 
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>{stats.universityPapers || 0} Papers Available</span>
+                <span>{stats.universityCount || 3}+ Universities</span>
+              </div>
+
+              <Link
+                to="/past-papers/university"
+                className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all group-hover:gap-3"
+              >
+                <span>View University Papers</span>
+                <FaArrowRight className="text-[10px]" />
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Non-intrusive Ad Placement */}
       <AdPlaceholder type="banner" />
 
-      {/* Past Papers Grid / Loading / Empty State */}
-      {loading ? (
-        <div className="py-24 text-center text-slate-400 text-sm animate-pulse">
-          Loading past papers catalog...
+      {/* Capped Recent Uploads Section (Only 3-6 Papers) */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <FaClock className="text-blue-600" />
+              <span>Recently Uploaded Past Papers</span>
+            </h2>
+            <p className="text-xs text-slate-500">Latest past paper additions added to the EduTools LK archive.</p>
+          </div>
+          <Link
+            to="/past-papers/ol"
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5"
+          >
+            <span>View All Papers</span>
+            <FaArrowRight className="text-[10px]" />
+          </Link>
         </div>
-      ) : papers.length > 0 ? (
-        <div className="space-y-10">
+
+        {loading ? (
+          <div className="py-12 text-center text-slate-400 text-xs animate-pulse">
+            Loading recent papers catalog...
+          </div>
+        ) : recentPapers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {papers.map((paper) => (
+            {recentPapers.slice(0, 6).map((paper) => (
               <PastPaperCard key={paper._id} paper={paper} />
             ))}
           </div>
-
-          {/* Pagination */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={(page) => setCurrentPage(page)}
-          />
-        </div>
-      ) : (
-        <div className="p-16 bg-white rounded-3xl border border-slate-200 text-center space-y-4">
-          <div className="p-4 bg-slate-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto text-slate-400 text-2xl">
-            <FaFilePdf />
+        ) : (
+          <div className="p-8 bg-white rounded-3xl border border-slate-200 text-center text-xs text-slate-500">
+            No papers uploaded yet. Check back soon!
           </div>
-          <h2 className="text-xl font-bold text-slate-800">No past papers found matching your criteria</h2>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try resetting your active filters or searching for alternative subjects like "Mathematics" or "Physics".
-          </p>
-          <button
-            onClick={handleClearFilters}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors"
-          >
-            Clear All Filters
-          </button>
-        </div>
-      )}
+        )}
+      </div>
+
     </div>
   );
 };
