@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   FaFilePdf, 
   FaPlus, 
@@ -18,8 +18,25 @@ import {
   FaDownload,
   FaCog,
   FaArrowLeft,
-  FaBook
+  FaBook,
+  FaFileSignature,
+  FaCloudUploadAlt,
+  FaExclamationTriangle,
+  FaCalendarCheck,
+  FaExternalLinkAlt,
+  FaBan,
+  FaCheck
 } from 'react-icons/fa';
+import {
+  getAdminPaperRequests,
+  updatePaperRequestStatus,
+  getAdminPaperContributions,
+  moderatePaperContribution,
+  getAdminContentReports,
+  updateContentReportStatus,
+  createOrUpdateExamSchedule,
+  getExamSchedules,
+} from '../../services/interactionService';
 import Seo from '../../components/Seo';
 import api from '../../services/api';
 import { 
@@ -47,8 +64,28 @@ const formatFileSize = (bytes) => {
 };
 
 const AdminPastPapers = () => {
-  // Navigation Tabs: 'ol' | 'al' | 'university' | 'subjects' | 'hierarchy'
+  // Navigation Tabs: 'ol' | 'al' | 'university' | 'subjects' | 'requests' | 'contributions' | 'reports' | 'schedules'
   const [activeTab, setActiveTab] = useState('ol');
+
+  // ── Moderation State ──────────────────────────────────────────
+  const [paperRequests, setPaperRequests] = useState([]);
+  const [contributions, setContributions] = useState([]);
+  const [contentReports, setContentReports] = useState([]);
+  const [examSchedules, setExamSchedules] = useState([]);
+  const [moderationLoading, setModerationLoading] = useState(false);
+  const [moderationMsg, setModerationMsg] = useState('');
+
+  // Schedule form
+  const [scheduleForm, setScheduleForm] = useState({
+    examType: 'AL',
+    year: new Date().getFullYear(),
+    examTitle: '',
+    startDate: '',
+    endDate: '',
+    officialSourceUrl: '',
+    isVerified: true,
+  });
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   // Stats
   const [stats, setStats] = useState({
@@ -155,6 +192,23 @@ const AdminPastPapers = () => {
     setSelectedCourse(null);
     setSelectedModule(null);
     setSearchQuery('');
+
+    // Lazily fetch moderation data on first tab visit
+    if (tab === 'requests') {
+      setModerationLoading(true);
+      getAdminPaperRequests().then(r => setPaperRequests(r.data || [])).finally(() => setModerationLoading(false));
+    }
+    if (tab === 'contributions') {
+      setModerationLoading(true);
+      getAdminPaperContributions().then(r => setContributions(r.data || [])).finally(() => setModerationLoading(false));
+    }
+    if (tab === 'reports') {
+      setModerationLoading(true);
+      getAdminContentReports().then(r => setContentReports(r.data || [])).finally(() => setModerationLoading(false));
+    }
+    if (tab === 'schedules') {
+      getExamSchedules().then(r => setExamSchedules(r.data || [])).catch(() => {});
+    }
   };
 
   // Open Paper Upload Modal with Auto-filled Context
@@ -429,6 +483,68 @@ const AdminPastPapers = () => {
         >
           <FaCog /> Subject Settings
         </button>
+
+        {/* Separator */}
+        <span className="hidden sm:block h-6 border-l border-slate-200"></span>
+
+        <button
+          onClick={() => handleTabChange('requests')}
+          className={`px-5 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === 'requests'
+              ? 'bg-blue-800 text-white shadow-md'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <FaFileSignature /> Requests
+          {paperRequests.filter(r => r.status === 'pending').length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-black">
+              {paperRequests.filter(r => r.status === 'pending').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('contributions')}
+          className={`px-5 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === 'contributions'
+              ? 'bg-indigo-800 text-white shadow-md'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <FaCloudUploadAlt /> Contributions
+          {contributions.filter(c => c.status === 'pending').length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-black">
+              {contributions.filter(c => c.status === 'pending').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('reports')}
+          className={`px-5 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === 'reports'
+              ? 'bg-rose-700 text-white shadow-md'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <FaExclamationTriangle /> Reports
+          {contentReports.filter(r => r.status === 'pending').length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-black">
+              {contentReports.filter(r => r.status === 'pending').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('schedules')}
+          className={`px-5 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === 'schedules'
+              ? 'bg-teal-700 text-white shadow-md'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <FaCalendarCheck /> Schedules
+        </button>
       </div>
 
       {/* TAB 1 & 2: O/L AND A/L SUBJECT HIERARCHY BAR */}
@@ -629,6 +745,280 @@ const AdminPastPapers = () => {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 5: PAPER REQUESTS ────────────────────────────────────── */}
+      {activeTab === 'requests' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><FaFileSignature className="text-blue-600" /> Paper Requests</h2>
+              <p className="text-xs text-slate-500">User-submitted requests for missing papers. Review and update their status.</p>
+            </div>
+            <button onClick={async () => { setModerationLoading(true); const r = await getAdminPaperRequests(); setPaperRequests(r.data || []); setModerationLoading(false); }} className="text-xs font-semibold text-blue-600 hover:underline">Refresh</button>
+          </div>
+
+          {moderationMsg && <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs">{moderationMsg}</div>}
+
+          {moderationLoading ? (
+            <div className="py-12 text-center text-slate-400 text-xs animate-pulse">Loading requests...</div>
+          ) : paperRequests.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">No paper requests found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold rounded-tl-xl">Requested Paper</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Year / Medium</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Email</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Status</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold rounded-tr-xl">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paperRequests.map((req) => (
+                    <tr key={req._id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {req.examType} {req.subject} {req.paperType}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{req.year} · {req.medium}</td>
+                      <td className="px-4 py-3 text-slate-500">{req.email}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-lg font-bold capitalize ${
+                          req.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                          req.status === 'fulfilled' ? 'bg-emerald-50 text-emerald-700' :
+                          req.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'
+                        }`}>{req.status}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5">
+                          {req.status === 'pending' && (
+                            <>
+                              <button onClick={async () => { await updatePaperRequestStatus(req._id, { status: 'reviewing' }); setModerationMsg('Marked as reviewing.'); const r = await getAdminPaperRequests(); setPaperRequests(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold">Reviewing</button>
+                              <button onClick={async () => { await updatePaperRequestStatus(req._id, { status: 'fulfilled' }); setModerationMsg('Marked as fulfilled!'); const r = await getAdminPaperRequests(); setPaperRequests(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold"><FaCheck className="inline" /> Fulfil</button>
+                              <button onClick={async () => { await updatePaperRequestStatus(req._id, { status: 'rejected' }); setModerationMsg('Request rejected.'); const r = await getAdminPaperRequests(); setPaperRequests(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg font-semibold"><FaBan className="inline" /> Reject</button>
+                            </>
+                          )}
+                          {req.status !== 'pending' && <span className="text-slate-400 italic">Done</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 6: PAPER CONTRIBUTIONS ──────────────────────────────── */}
+      {activeTab === 'contributions' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><FaCloudUploadAlt className="text-indigo-600" /> User Paper Contributions</h2>
+              <p className="text-xs text-slate-500">Review and approve user-contributed PDFs. Approved papers are automatically published to the past papers collection.</p>
+            </div>
+            <button onClick={async () => { setModerationLoading(true); const r = await getAdminPaperContributions(); setContributions(r.data || []); setModerationLoading(false); }} className="text-xs font-semibold text-indigo-600 hover:underline">Refresh</button>
+          </div>
+
+          {moderationMsg && <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs">{moderationMsg}</div>}
+
+          {moderationLoading ? (
+            <div className="py-12 text-center text-slate-400 text-xs animate-pulse">Loading contributions...</div>
+          ) : contributions.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">No user contributions found.</div>
+          ) : (
+            <div className="space-y-4">
+              {contributions.map((c) => (
+                <div key={c._id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="font-extrabold text-slate-900 text-sm">{c.year} {c.examType} {c.subject} {c.paperType} ({c.medium})</div>
+                      <div className="text-slate-500">By: {c.name || 'Anonymous'} · {c.email}</div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg font-bold capitalize ${
+                      c.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                      c.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
+                      'bg-rose-50 text-rose-700'
+                    }`}>{c.status}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <a href={c.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-blue-600 hover:underline font-semibold">
+                      <FaFilePdf /> Preview PDF <FaExternalLinkAlt className="text-[9px]" />
+                    </a>
+                    {c.notes && <span className="text-slate-500 italic">Notes: {c.notes}</span>}
+                  </div>
+                  {c.status === 'pending' && (
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={async () => { await moderatePaperContribution(c._id, { action: 'approve' }); setModerationMsg('Contribution approved & published!'); const r = await getAdminPaperContributions(); setContributions(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5"><FaCheck /> Approve & Publish</button>
+                      <button onClick={async () => { await moderatePaperContribution(c._id, { action: 'reject' }); setModerationMsg('Contribution rejected.'); const r = await getAdminPaperContributions(); setContributions(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold flex items-center gap-1.5"><FaBan /> Reject</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 7: CONTENT REPORTS ──────────────────────────────────── */}
+      {activeTab === 'reports' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><FaExclamationTriangle className="text-rose-600" /> Content Reports</h2>
+              <p className="text-xs text-slate-500">User-submitted problem reports for papers. Review the flagged paper and resolve or dismiss.</p>
+            </div>
+            <button onClick={async () => { setModerationLoading(true); const r = await getAdminContentReports(); setContentReports(r.data || []); setModerationLoading(false); }} className="text-xs font-semibold text-rose-600 hover:underline">Refresh</button>
+          </div>
+
+          {moderationMsg && <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs">{moderationMsg}</div>}
+
+          {moderationLoading ? (
+            <div className="py-12 text-center text-slate-400 text-xs animate-pulse">Loading reports...</div>
+          ) : contentReports.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">No content reports filed. All clear!</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold rounded-tl-xl">Paper</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Reason</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Details</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold">Status</th>
+                    <th className="text-left px-4 py-3 text-slate-500 font-semibold rounded-tr-xl">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {contentReports.map((report) => (
+                    <tr key={report._id} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-bold text-slate-900 max-w-xs truncate">{report.paperTitle || (report.paperId?.title) || 'Unknown Paper'}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 rounded-md font-semibold">{report.reason}</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{report.details || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-lg font-bold capitalize ${
+                          report.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                          report.status === 'resolved' ? 'bg-emerald-50 text-emerald-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>{report.status}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {report.status === 'pending' && (
+                          <div className="flex gap-1.5">
+                            <button onClick={async () => { await updateContentReportStatus(report._id, { status: 'resolved' }); setModerationMsg('Report resolved.'); const r = await getAdminContentReports(); setContentReports(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold"><FaCheck className="inline" /> Resolve</button>
+                            <button onClick={async () => { await updateContentReportStatus(report._id, { status: 'dismissed' }); setModerationMsg('Report dismissed.'); const r = await getAdminContentReports(); setContentReports(r.data || []); setTimeout(() => setModerationMsg(''), 3000); }} className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold"><FaBan className="inline" /> Dismiss</button>
+                          </div>
+                        )}
+                        {report.status !== 'pending' && <span className="text-slate-400 italic">Actioned</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 8: EXAM SCHEDULES & COUNTDOWNS ──────────────────────── */}
+      {activeTab === 'schedules' && (
+        <div className="space-y-6">
+          {/* Add / Update Schedule Form */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+            <div className="pb-4 border-b border-slate-100">
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2"><FaCalendarCheck className="text-teal-600" /> Add Verified Exam Schedule</h2>
+              <p className="text-xs text-slate-500">Add upcoming exam dates shown in the countdown widget on the Past Papers hub page.</p>
+            </div>
+
+            {moderationMsg && <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs">{moderationMsg}</div>}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Exam Type</label>
+                <select value={scheduleForm.examType} onChange={e => setScheduleForm({...scheduleForm, examType: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium">
+                  <option value="OL">G.C.E. O/L</option>
+                  <option value="AL">G.C.E. A/L</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Exam Year</label>
+                <input type="number" value={scheduleForm.year} onChange={e => setScheduleForm({...scheduleForm, year: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium" />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block font-semibold text-slate-700 mb-1">Exam Title *</label>
+                <input type="text" placeholder="e.g. G.C.E. A/L 2025 Examinations" value={scheduleForm.examTitle} onChange={e => setScheduleForm({...scheduleForm, examTitle: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium" />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Start Date *</label>
+                <input type="date" value={scheduleForm.startDate} onChange={e => setScheduleForm({...scheduleForm, startDate: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium" />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">End Date</label>
+                <input type="date" value={scheduleForm.endDate} onChange={e => setScheduleForm({...scheduleForm, endDate: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium" />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Official Source URL</label>
+                <input type="url" placeholder="https://doenets.lk/..." value={scheduleForm.officialSourceUrl} onChange={e => setScheduleForm({...scheduleForm, officialSourceUrl: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium" />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                disabled={savingSchedule || !scheduleForm.examTitle || !scheduleForm.startDate}
+                onClick={async () => {
+                  setSavingSchedule(true);
+                  try {
+                    await createOrUpdateExamSchedule(scheduleForm);
+                    setModerationMsg('Exam schedule saved and activated!');
+                    const r = await getExamSchedules();
+                    setExamSchedules(r.data || []);
+                    setScheduleForm({ examType: 'AL', year: new Date().getFullYear(), examTitle: '', startDate: '', endDate: '', officialSourceUrl: '', isVerified: true });
+                    setTimeout(() => setModerationMsg(''), 3000);
+                  } catch(err) {
+                    setModerationMsg('Failed to save schedule.');
+                  } finally {
+                    setSavingSchedule(false);
+                  }
+                }}
+                className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md disabled:opacity-60"
+              >
+                <FaCalendarCheck /> {savingSchedule ? 'Saving...' : 'Save Exam Schedule'}
+              </button>
+            </div>
+          </div>
+
+          {/* Active Schedules List */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-sm font-extrabold text-slate-900">Active Verified Schedules ({examSchedules.length})</h3>
+            {examSchedules.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 text-xs">No exam schedules added yet. Add one above to activate the countdown widget.</div>
+            ) : (
+              <div className="space-y-3">
+                {examSchedules.map((s) => (
+                  <div key={s._id} className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="font-extrabold text-slate-900">{s.examTitle}</div>
+                      <div className="text-slate-500">Starts: {new Date(s.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} {s.endDate ? `· Ends: ${new Date(s.endDate).toLocaleDateString('en-GB')}` : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-teal-100 text-teal-700 rounded-lg font-bold">{s.examType}</span>
+                      {s.officialSourceUrl && (
+                        <a href={s.officialSourceUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                          <FaExternalLinkAlt className="text-[9px]" /> Source
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

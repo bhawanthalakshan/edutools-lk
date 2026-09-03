@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FaFilePdf, FaSearch, FaFilter, FaRedo, FaCalendarAlt } from 'react-icons/fa';
+import { FaFilePdf, FaSearch, FaFilter, FaRedo, FaCalendarAlt, FaFileSignature } from 'react-icons/fa';
 import Seo from '../../components/Seo';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import AdPlaceholder from '../../components/AdPlaceholder';
 import PastPaperCard from '../../components/PastPaperCard';
+import RequestPaperModal from '../../components/RequestPaperModal';
 import { getSubjectBySlug, getPastPapers } from '../../services/pastPaperService';
 
 const ALSubjectPage = () => {
@@ -13,8 +14,10 @@ const ALSubjectPage = () => {
   const [subject, setSubject] = useState(null);
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
-  // Filter states
+  // Filter states & Resource Tabs
+  const [activeResourceTab, setActiveResourceTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [mediumFilter, setMediumFilter] = useState('');
@@ -42,6 +45,7 @@ const ALSubjectPage = () => {
   }, [subjectSlug]);
 
   const handleClearFilters = () => {
+    setActiveResourceTab('All');
     setSearchQuery('');
     setYearFilter('');
     setMediumFilter('');
@@ -49,14 +53,21 @@ const ALSubjectPage = () => {
   };
 
   const filteredPapers = papers.filter((paper) => {
+    const matchTab =
+      activeResourceTab === 'All' ||
+      (paper.resourceType && paper.resourceType.toLowerCase() === activeResourceTab.toLowerCase()) ||
+      (paper.paperType && paper.paperType.toLowerCase() === activeResourceTab.toLowerCase());
+
     const matchSearch =
       !searchQuery ||
       paper.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       paper.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchYear = !yearFilter || paper.year === Number(yearFilter);
     const matchMedium = !mediumFilter || paper.medium.toLowerCase() === mediumFilter.toLowerCase();
     const matchType = !paperTypeFilter || paper.paperType.toLowerCase() === paperTypeFilter.toLowerCase();
-    return matchSearch && matchYear && matchMedium && matchType;
+
+    return matchTab && matchSearch && matchYear && matchMedium && matchType;
   });
 
   const groupedPapers = filteredPapers.reduce((groups, paper) => {
@@ -69,8 +80,10 @@ const ALSubjectPage = () => {
   const yearsDescending = Object.keys(groupedPapers).sort((a, b) => Number(b) - Number(a));
   const subjectName = subject ? subject.name : subjectSlug.replace(/-/g, ' ').toUpperCase();
 
+  const resourceTabs = ['All', 'Past Paper', 'Marking Scheme', 'Model Paper', 'Revision Paper'];
+
   return (
-    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-fade-in-up">
       <Seo
         title={`2025 A/L ${subjectName} Past Papers & Marking Schemes PDF`}
         description={`Download Sri Lankan G.C.E. Advanced Level (A/L) ${subjectName} Paper I, Paper II, MCQ, and Essay question papers with marking schemes.`}
@@ -92,15 +105,43 @@ const ALSubjectPage = () => {
 
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 p-8 sm:p-10 rounded-3xl text-white shadow-xl space-y-3">
-        <span className="text-xs font-bold uppercase tracking-widest text-purple-300 bg-purple-500/20 px-3 py-1 rounded-lg">
-          A/L Subject Resource
-        </span>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span className="text-xs font-bold uppercase tracking-widest text-purple-300 bg-purple-500/20 px-3 py-1 rounded-lg">
+            A/L Subject Resource Archive
+          </span>
+
+          <button
+            onClick={() => setIsRequestModalOpen(true)}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all btn-press"
+          >
+            <FaFileSignature className="text-purple-300" />
+            <span>Request Missing {subjectName} Paper</span>
+          </button>
+        </div>
+
         <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
           A/L {subjectName} Past Papers
         </h1>
         <p className="text-xs sm:text-sm text-purple-100/90 max-w-3xl leading-relaxed">
           Explore Advanced Level {subjectName} past examination papers, MCQ answer sheets, essay questions, and official Department of Examinations marking schemes.
         </p>
+      </div>
+
+      {/* Resource Type Navigation Tabs */}
+      <div className="flex border-b border-slate-200 bg-white p-2 rounded-2xl border shadow-xs gap-1 overflow-x-auto">
+        {resourceTabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveResourceTab(tab)}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              activeResourceTab === tab
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            {tab === 'All' ? 'All Resources' : `${tab}s`}
+          </button>
+        ))}
       </div>
 
       {/* Filter Control Bar */}
@@ -163,10 +204,10 @@ const ALSubjectPage = () => {
             onChange={(e) => setPaperTypeFilter(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-medium focus:outline-none"
           >
-            <option value="">All Paper Types</option>
+            <option value="">All Formats</option>
             <option value="Past Paper">Past Paper</option>
+            <option value="Marking Scheme">Marking Scheme</option>
             <option value="Model Paper">Model Paper</option>
-            <option value="Term Test">Term Test</option>
             <option value="Revision Paper">Revision Paper</option>
           </select>
         </div>
@@ -210,16 +251,31 @@ const ALSubjectPage = () => {
           </div>
           <h2 className="text-xl font-bold text-slate-800">No {subjectName} papers found matching criteria</h2>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try resetting your active filters or checking back soon for new past paper additions.
+            Try resetting your active filters or request this missing paper from our team.
           </p>
-          <button
-            onClick={handleClearFilters}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
-          >
-            Clear All Filters
-          </button>
+          <div className="flex justify-center gap-3 pt-2">
+            <button
+              onClick={handleClearFilters}
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors btn-press"
+            >
+              Clear Filters
+            </button>
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 btn-press"
+            >
+              <FaFileSignature /> Request This Paper
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Request Paper Modal */}
+      <RequestPaperModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        initialData={{ examType: 'AL', subject: subjectName }}
+      />
     </div>
   );
 };

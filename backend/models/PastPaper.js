@@ -43,8 +43,18 @@ const pastPaperSchema = new mongoose.Schema(
     },
     paperType: {
       type: String,
-      enum: ['Past Paper', 'Model Paper', 'Term Test', 'Revision Paper', 'Other'],
+      enum: ['Past Paper', 'Model Paper', 'Term Test', 'Revision Paper', 'Paper I', 'Paper II', 'MCQ', 'Structured Essay', 'Essay', 'Marking Scheme', 'Other'],
       default: 'Past Paper',
+    },
+    resourceType: {
+      type: String,
+      enum: ['Past Paper', 'Marking Scheme', 'Model Paper', 'Revision Paper', 'Term Test', 'Other'],
+      default: 'Past Paper',
+    },
+    relatedPaperId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PastPaper',
+      default: null,
     },
     term: {
       type: String,
@@ -91,6 +101,24 @@ const pastPaperSchema = new mongoose.Schema(
       type: String,
       default: 'Official Department / Teacher Contribution',
     },
+    sourceName: {
+      type: String,
+      default: '',
+    },
+    sourceUrl: {
+      type: String,
+      default: '',
+    },
+    sourceType: {
+      type: String,
+      enum: ['Official Department', 'University Authority', 'Verified Teacher', 'Community Contribution', 'Reference Archive'],
+      default: 'Official Department',
+    },
+    verificationStatus: {
+      type: String,
+      enum: ['Verified Official', 'Verified Teacher', 'Community Upload', 'Unverified'],
+      default: 'Verified Official',
+    },
     permissionConfirmed: {
       type: Boolean,
       required: [true, 'Permission confirmation is required'],
@@ -125,7 +153,7 @@ const pastPaperSchema = new mongoose.Schema(
 
 // Indexes for fast server-side filtering & search
 pastPaperSchema.index({ title: 'text', subject: 'text', description: 'text' });
-pastPaperSchema.index({ examType: 1, status: 1 });
+pastPaperSchema.index({ examType: 1, status: 1, resourceType: 1 });
 pastPaperSchema.index({ subjectId: 1, year: -1 });
 pastPaperSchema.index({ universityId: 1, courseId: 1, moduleId: 1 });
 

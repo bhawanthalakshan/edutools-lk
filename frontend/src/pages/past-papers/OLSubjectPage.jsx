@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { FaFilePdf, FaSearch, FaFilter, FaRedo, FaDownload, FaEye, FaCalendarAlt } from 'react-icons/fa';
+import { useParams } from 'react-router-dom';
+import { FaFilePdf, FaSearch, FaFilter, FaRedo, FaCalendarAlt, FaFileSignature } from 'react-icons/fa';
 import Seo from '../../components/Seo';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import AdPlaceholder from '../../components/AdPlaceholder';
 import PastPaperCard from '../../components/PastPaperCard';
-import { getSubjectBySlug, getPastPapers, triggerPastPaperDownload } from '../../services/pastPaperService';
+import RequestPaperModal from '../../components/RequestPaperModal';
+import { getSubjectBySlug, getPastPapers } from '../../services/pastPaperService';
 
 const OLSubjectPage = () => {
   const { subjectSlug } = useParams();
@@ -13,8 +14,10 @@ const OLSubjectPage = () => {
   const [subject, setSubject] = useState(null);
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
-  // Filters
+  // Tabs & Filters
+  const [activeResourceTab, setActiveResourceTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [mediumFilter, setMediumFilter] = useState('');
@@ -46,6 +49,7 @@ const OLSubjectPage = () => {
   }, [subjectSlug]);
 
   const handleClearFilters = () => {
+    setActiveResourceTab('All');
     setSearchQuery('');
     setYearFilter('');
     setMediumFilter('');
@@ -54,14 +58,21 @@ const OLSubjectPage = () => {
 
   // Filter papers client-side from the subject collection
   const filteredPapers = papers.filter((paper) => {
+    const matchTab =
+      activeResourceTab === 'All' ||
+      (paper.resourceType && paper.resourceType.toLowerCase() === activeResourceTab.toLowerCase()) ||
+      (paper.paperType && paper.paperType.toLowerCase() === activeResourceTab.toLowerCase());
+
     const matchSearch =
       !searchQuery ||
       paper.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       paper.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchYear = !yearFilter || paper.year === Number(yearFilter);
     const matchMedium = !mediumFilter || paper.medium.toLowerCase() === mediumFilter.toLowerCase();
     const matchType = !paperTypeFilter || paper.paperType.toLowerCase() === paperTypeFilter.toLowerCase();
-    return matchSearch && matchYear && matchMedium && matchType;
+
+    return matchTab && matchSearch && matchYear && matchMedium && matchType;
   });
 
   // Group papers by Year in descending order
@@ -75,8 +86,10 @@ const OLSubjectPage = () => {
   const yearsDescending = Object.keys(groupedPapers).sort((a, b) => Number(b) - Number(a));
   const subjectName = subject ? subject.name : subjectSlug.replace(/-/g, ' ').toUpperCase();
 
+  const resourceTabs = ['All', 'Past Paper', 'Marking Scheme', 'Model Paper', 'Revision Paper'];
+
   return (
-    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-fade-in-up">
       <Seo
         title={`2025 O/L ${subjectName} Past Papers & Marking Schemes PDF`}
         description={`Download Sri Lankan G.C.E. O/L ${subjectName} past papers, model question sets, and marking schemes in Sinhala, Tamil, and English mediums.`}
@@ -98,15 +111,43 @@ const OLSubjectPage = () => {
 
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-8 sm:p-10 rounded-3xl text-white shadow-xl space-y-3">
-        <span className="text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-500/20 px-3 py-1 rounded-lg">
-          O/L Subject Resource
-        </span>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span className="text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-500/20 px-3 py-1 rounded-lg">
+            O/L Subject Resource Archive
+          </span>
+
+          <button
+            onClick={() => setIsRequestModalOpen(true)}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all btn-press"
+          >
+            <FaFileSignature className="text-blue-400" />
+            <span>Request Missing {subjectName} Paper</span>
+          </button>
+        </div>
+
         <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
           O/L {subjectName} Past Papers
         </h1>
         <p className="text-xs sm:text-sm text-blue-100/90 max-w-3xl leading-relaxed">
           Download G.C.E. Ordinary Level {subjectName} examination papers, revision papers, and official marking guidelines in PDF format. Select a year section below to download.
         </p>
+      </div>
+
+      {/* Resource Type Navigation Tabs */}
+      <div className="flex border-b border-slate-200 bg-white p-2 rounded-2xl border shadow-xs gap-1 overflow-x-auto">
+        {resourceTabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveResourceTab(tab)}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              activeResourceTab === tab
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            {tab === 'All' ? 'All Resources' : `${tab}s`}
+          </button>
+        ))}
       </div>
 
       {/* Filter Control Bar */}
@@ -169,10 +210,10 @@ const OLSubjectPage = () => {
             onChange={(e) => setPaperTypeFilter(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-medium focus:outline-none"
           >
-            <option value="">All Paper Formats</option>
+            <option value="">All Formats</option>
             <option value="Past Paper">Past Paper</option>
+            <option value="Marking Scheme">Marking Scheme</option>
             <option value="Model Paper">Model Paper</option>
-            <option value="Term Test">Term Test</option>
             <option value="Revision Paper">Revision Paper</option>
           </select>
         </div>
@@ -216,16 +257,31 @@ const OLSubjectPage = () => {
           </div>
           <h2 className="text-xl font-bold text-slate-800">No {subjectName} papers found matching criteria</h2>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try resetting your active filters or searching for alternative exam years.
+            Try resetting your active filters or request this missing paper from our team.
           </p>
-          <button
-            onClick={handleClearFilters}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors"
-          >
-            Clear All Filters
-          </button>
+          <div className="flex justify-center gap-3 pt-2">
+            <button
+              onClick={handleClearFilters}
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors btn-press"
+            >
+              Clear Filters
+            </button>
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 btn-press"
+            >
+              <FaFileSignature /> Request This Paper
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Request Paper Modal */}
+      <RequestPaperModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        initialData={{ examType: 'OL', subject: subjectName }}
+      />
     </div>
   );
 };

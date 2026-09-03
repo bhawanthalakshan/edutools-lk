@@ -8,12 +8,17 @@ import {
   FaArrowRight, 
   FaClock, 
   FaDownload, 
-  FaCheckCircle 
+  FaCheckCircle,
+  FaFileSignature,
+  FaCloudUploadAlt
 } from 'react-icons/fa';
 import Seo from '../../components/Seo';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import AdPlaceholder from '../../components/AdPlaceholder';
 import PastPaperCard from '../../components/PastPaperCard';
+import ExamCountdownSection from '../../components/ExamCountdownSection';
+import RequestPaperModal from '../../components/RequestPaperModal';
+import ContributePaperModal from '../../components/ContributePaperModal';
 import { getPastPapers, getPastPaperStats } from '../../services/pastPaperService';
 
 const PastPapersHub = () => {
@@ -29,6 +34,8 @@ const PastPapersHub = () => {
   });
   const [recentPapers, setRecentPapers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -42,7 +49,7 @@ const PastPapersHub = () => {
   }, []);
 
   return (
-    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+    <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 animate-fade-in-up">
       <Seo
         title="Past Papers & Marking Schemes - G.C.E. O/L, A/L & University"
         description="Download free Sri Lankan G.C.E. O/L, G.C.E. A/L, and University past papers, model papers, and marking schemes in Sinhala, Tamil, and English mediums."
@@ -86,6 +93,9 @@ const PastPapersHub = () => {
           </div>
         </div>
       </div>
+
+      {/* Exam Countdown Widget */}
+      <ExamCountdownSection />
 
       {/* 3 Main Category Cards (O/L, A/L, University) */}
       <div className="space-y-4">
@@ -198,7 +208,46 @@ const PastPapersHub = () => {
 
       <AdPlaceholder type="banner" />
 
-      {/* Capped Recent Uploads Section (Only 3-6 Papers) */}
+      {/* Community Request & Contribute Banner */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-3xl p-7 space-y-3 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="space-y-2">
+            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-xl">
+              <FaFileSignature />
+            </div>
+            <h3 className="text-lg font-extrabold text-slate-900">Can't Find a Paper?</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Can't find a specific past paper, marking scheme, or model paper? Submit a request and our team will work to locate and publish it.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsRequestModalOpen(true)}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-press"
+          >
+            <FaFileSignature /> Request a Missing Paper
+          </button>
+        </div>
+
+        <div className="bg-indigo-50 border border-indigo-200 rounded-3xl p-7 space-y-3 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="space-y-2">
+            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-xl">
+              <FaCloudUploadAlt />
+            </div>
+            <h3 className="text-lg font-extrabold text-slate-900">Have a Paper We're Missing?</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Help fellow students by contributing a past paper you have. Your uploaded document will be reviewed by our team before being published.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsContributeModalOpen(true)}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all btn-press"
+          >
+            <FaCloudUploadAlt /> Contribute a Paper
+          </button>
+        </div>
+      </div>
+
+      {/* Capped Recent Uploads Section */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -206,7 +255,7 @@ const PastPapersHub = () => {
               <FaClock className="text-blue-600" />
               <span>Recently Uploaded Past Papers</span>
             </h2>
-            <p className="text-xs text-slate-500">Latest past paper additions added to the EduTools LK archive.</p>
+            <p className="text-xs text-slate-500">Latest past paper additions added to the Examora archive.</p>
           </div>
           <Link
             to="/past-papers/ol"
@@ -233,6 +282,18 @@ const PastPapersHub = () => {
           </div>
         )}
       </div>
+
+      {/* Request Paper Modal */}
+      <RequestPaperModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+      />
+
+      {/* Contribute Paper Modal */}
+      <ContributePaperModal
+        isOpen={isContributeModalOpen}
+        onClose={() => setIsContributeModalOpen(false)}
+      />
 
     </div>
   );

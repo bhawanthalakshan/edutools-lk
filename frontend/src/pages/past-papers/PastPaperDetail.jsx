@@ -1,10 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaFilePdf, FaDownload, FaArrowLeft, FaCalendarAlt, FaLanguage, FaFileAlt, FaEye, FaShieldAlt, FaCheck } from 'react-icons/fa';
+import { 
+  FaFilePdf, 
+  FaDownload, 
+  FaArrowLeft, 
+  FaArrowRight, 
+  FaCalendarAlt, 
+  FaLanguage, 
+  FaFileAlt, 
+  FaEye, 
+  FaShieldAlt, 
+  FaCheck, 
+  FaExclamationTriangle, 
+  FaExternalLinkAlt,
+  FaCheckCircle,
+  FaBookOpen
+} from 'react-icons/fa';
 import Seo from '../../components/Seo';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import PastPaperCard from '../../components/PastPaperCard';
 import AdPlaceholder from '../../components/AdPlaceholder';
+import ReportProblemModal from '../../components/ReportProblemModal';
 import { getPastPaperBySlug, triggerPastPaperDownload } from '../../services/pastPaperService';
 import { SITE_CONFIG } from '../../config/siteConfig';
 
@@ -20,9 +36,13 @@ const PastPaperDetail = () => {
   const { slug } = useParams();
   const [paper, setPaper] = useState(null);
   const [relatedPapers, setRelatedPapers] = useState([]);
+  const [previousPaper, setPreviousPaper] = useState(null);
+  const [nextPaper, setNextPaper] = useState(null);
+  const [linkedScheme, setLinkedScheme] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloaded, setDownloaded] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -33,6 +53,9 @@ const PastPaperDetail = () => {
         const item = res.data;
         setPaper(item);
         if (res.related) setRelatedPapers(res.related);
+        if (res.previousPaper) setPreviousPaper(res.previousPaper);
+        if (res.nextPaper) setNextPaper(res.nextPaper);
+        if (res.linkedScheme) setLinkedScheme(res.linkedScheme);
       })
       .catch((err) => {
         console.error(err);
@@ -118,6 +141,10 @@ const PastPaperDetail = () => {
                 <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-lg text-xs font-semibold">
                   {paper.paperType}
                 </span>
+                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <FaCheckCircle className="text-emerald-500" />
+                  {paper.verificationStatus || 'Verified Official'}
+                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
                 {paper.title}
@@ -133,25 +160,67 @@ const PastPaperDetail = () => {
             <p className="text-xs text-slate-500 mt-0.5">Format: PDF Document • {formatFileSize(paper.fileSize)}</p>
           </div>
 
-          <button
-            onClick={handleDownloadClick}
-            className={`px-7 py-3.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all shrink-0 btn-press ${
-              downloaded
-                ? 'bg-emerald-600 text-white'
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/25'
-            }`}
-          >
-            {downloaded ? (
-              <>
-                <FaCheck className="text-sm" /> Downloaded
-              </>
-            ) : (
-              <>
-                <FaDownload className="text-sm" /> Download PDF File
-              </>
+          <div className="flex flex-wrap items-center gap-3">
+            {linkedScheme && (
+              <Link
+                to={`/past-papers/${linkedScheme.slug}`}
+                className="px-5 py-3.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all btn-press shrink-0"
+              >
+                <FaBookOpen /> View {linkedScheme.paperType === 'Marking Scheme' ? 'Marking Scheme' : 'Question Paper'}
+              </Link>
             )}
-          </button>
+
+            <button
+              onClick={handleDownloadClick}
+              className={`px-7 py-3.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all shrink-0 btn-press ${
+                downloaded
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/25'
+              }`}
+            >
+              {downloaded ? (
+                <>
+                  <FaCheck className="text-sm" /> Downloaded
+                </>
+              ) : (
+                <>
+                  <FaDownload className="text-sm" /> Download PDF File
+                </>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Previous & Next Year Quick Jump Controls */}
+        {(previousPaper || nextPaper) && (
+          <div className="flex items-center justify-between gap-4 py-3 px-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
+            {previousPaper ? (
+              <Link
+                to={`/past-papers/${previousPaper.slug}`}
+                className="flex items-center gap-1.5 font-bold text-slate-700 hover:text-blue-600 transition-colors"
+              >
+                <FaArrowLeft className="text-[10px]" />
+                <span>← {previousPaper.year} Paper</span>
+              </Link>
+            ) : (
+              <span className="text-slate-400">Earliest year in database</span>
+            )}
+
+            <span className="text-slate-300">|</span>
+
+            {nextPaper ? (
+              <Link
+                to={`/past-papers/${nextPaper.slug}`}
+                className="flex items-center gap-1.5 font-bold text-slate-700 hover:text-blue-600 transition-colors"
+              >
+                <span>{nextPaper.year} Paper →</span>
+                <FaArrowRight className="text-[10px]" />
+              </Link>
+            ) : (
+              <span className="text-slate-400">Latest year available</span>
+            )}
+          </div>
+        )}
 
         {/* Specification Details Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
@@ -194,16 +263,34 @@ const PastPaperDetail = () => {
           </div>
         )}
 
-        {/* Rights & Source Footer Notice */}
-        <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl text-[11px] text-slate-500 space-y-1 flex items-start gap-2">
-          <FaShieldAlt className="text-slate-400 text-sm shrink-0 mt-0.5" />
-          <div>
-            <span className="font-bold text-slate-700">Source &amp; Educational Rights Notice:</span>
-            <p>
-              Uploaded by authorized administrators from: <em>{paper.source || 'Official Department / Teacher Contribution'}</em>.
-              {SITE_CONFIG.name} distributes past papers exclusively for non-commercial student learning and exam preparation.
-            </p>
+        {/* Rights, Source & Problem Report Footer Notice */}
+        <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl text-[11px] text-slate-500 space-y-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-2">
+            <FaShieldAlt className="text-slate-400 text-sm shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-slate-700">Source Attribution:</span>
+              <p>
+                Uploaded from: <em>{paper.sourceName || paper.source || 'Department of Examinations Sri Lanka'}</em>.
+                {paper.sourceUrl && (
+                  <a
+                    href={paper.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-1.5 text-blue-600 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    Official Link <FaExternalLinkAlt className="text-[9px]" />
+                  </a>
+                )}
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1 shrink-0 self-end sm:self-auto btn-press"
+          >
+            <FaExclamationTriangle /> Report a problem
+          </button>
         </div>
 
       </div>
@@ -221,6 +308,13 @@ const PastPaperDetail = () => {
           </div>
         </section>
       )}
+
+      {/* Report Problem Modal Dialog */}
+      <ReportProblemModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        paper={paper}
+      />
 
     </div>
   );

@@ -99,6 +99,8 @@ app.use(express.json());
 // Serve Static Upload Files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+const interactionRoutes = require('./routes/interactionRoutes');
+
 // API Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', strictFormLimiter, authRoutes);
@@ -109,6 +111,7 @@ app.use('/api/tools', toolRoutes);
 app.use('/api/past-papers', pastPaperRoutes);
 app.use('/api/subjects', subjectRoutes);
 app.use('/api/universities', universityRoutes);
+app.use('/api/interactions', interactionRoutes);
 app.use('/sitemap.xml', sitemapRoutes);
 app.use('/robots.txt', robotsRoutes);
 

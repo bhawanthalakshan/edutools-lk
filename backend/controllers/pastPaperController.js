@@ -24,6 +24,7 @@ const getPastPapers = async (req, res, next) => {
       year,
       medium,
       paperType,
+      resourceType,
       term,
       search,
       page = 1,
@@ -85,16 +86,26 @@ const getPastPapers = async (req, res, next) => {
     if (year) query.year = Number(year);
     if (medium) query.medium = { $regex: medium, $options: 'i' };
     if (paperType) query.paperType = { $regex: paperType, $options: 'i' };
+    if (resourceType) query.resourceType = { $regex: resourceType, $options: 'i' };
     if (term) query.term = { $regex: term, $options: 'i' };
 
-    // Search filter across title, subject, description
+    // Smart search filter across title, subject, year, medium, description
     if (search) {
-      const searchRegex = new RegExp(search, 'i');
-      query.$or = [
+      const searchTrimmed = search.trim();
+      const yearMatch = searchTrimmed.match(/\b(19\d\d|20\d\d)\b/);
+      const searchRegex = new RegExp(searchTrimmed.replace(/[^a-zA-Z0-9\s]/g, ''), 'i');
+
+      const searchConditions = [
         { title: searchRegex },
         { subject: searchRegex },
         { description: searchRegex },
       ];
+
+      if (yearMatch) {
+        searchConditions.push({ year: Number(yearMatch[1]) });
+      }
+
+      query.$or = searchConditions;
     }
 
     const pageNum = parseInt(page, 10) || 1;
@@ -107,6 +118,7 @@ const getPastPapers = async (req, res, next) => {
       .populate('universityId', 'name slug logo')
       .populate('courseId', 'name slug')
       .populate('moduleId', 'name slug code')
+      .populate('relatedPaperId', 'title slug fileUrl')
       .sort(sort)
       .skip(skip)
       .limit(limitNum);
@@ -178,14 +190,15 @@ const getPastPaperBySlug = async (req, res, next) => {
       .populate('subjectId', 'name slug icon')
       .populate('universityId', 'name slug logo')
       .populate('courseId', 'name slug')
-      .populate('moduleId', 'name slug code');
+      .populate('moduleId', 'name slug code')
+      .populate('relatedPaperId', 'title slug paperType resourceType fileUrl');
 
     if (!paper) {
       res.status(404);
       throw new Error(`Past paper with slug '${req.params.slug}' not found`);
     }
 
-    // Fetch up to 4 related papers from same subject / examType
+    // Related papers from same subject / examType
     const relatedQuery = {
       _id: { $ne: paper._id },
       examType: paper.examType,
@@ -201,10 +214,43 @@ const getPastPaperBySlug = async (req, res, next) => {
       .limit(4)
       .sort({ year: -1 });
 
+    // Previous year paper
+    const previousPaper = await PastPaper.findOne({
+      ...relatedQuery,
+      year: { $lt: paper.year },
+    }).sort({ year: -1 });
+
+    // Next year paper
+    const nextPaper = await PastPaper.findOne({
+      ...relatedQuery,
+      year: { $gt: paper.year },
+    }).sort({ year: 1 });
+
+    // Automatic Marking Scheme / Question Paper link if not explicitly set
+    let linkedScheme = paper.relatedPaperId;
+    if (!linkedScheme) {
+      const schemeQuery = {
+        _id: { $ne: paper._id },
+        subject: paper.subject,
+        year: paper.year,
+        examType: paper.examType,
+        status: 'published',
+      };
+      if (paper.paperType === 'Marking Scheme' || paper.resourceType === 'Marking Scheme') {
+        schemeQuery.paperType = { $ne: 'Marking Scheme' };
+      } else {
+        schemeQuery.$or = [{ paperType: 'Marking Scheme' }, { resourceType: 'Marking Scheme' }];
+      }
+      linkedScheme = await PastPaper.findOne(schemeQuery);
+    }
+
     res.status(200).json({
       success: true,
       data: paper,
       related: relatedPapers,
+      previousPaper: previousPaper ? { title: previousPaper.title, slug: previousPaper.slug, year: previousPaper.year } : null,
+      nextPaper: nextPaper ? { title: nextPaper.title, slug: nextPaper.slug, year: nextPaper.year } : null,
+      linkedScheme: linkedScheme ? { title: linkedScheme.title, slug: linkedScheme.slug, paperType: linkedScheme.paperType, resourceType: linkedScheme.resourceType } : null,
     });
   } catch (error) {
     next(error);
