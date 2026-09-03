@@ -1,156 +1,140 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { FaArrowRight, FaCalculator, FaBrain, FaBookReader, FaMagic, FaCheckCircle } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FaSearch, FaArrowRight, FaFilePdf, FaBookReader } from 'react-icons/fa';
+import { SITE_CONFIG } from '../config/siteConfig';
+import { useCountUp } from '../hooks/useCountUp';
 
-const HeroSection = () => {
+const StatCounter = ({ value, label, color, fallback }) => {
+  const animatedValue = useCountUp(value || fallback, 1200);
+
   return (
-    <section className="relative overflow-hidden pt-12 pb-20 lg:pt-16 lg:pb-28">
-      {/* Background Subtle Mesh & Glowing Orbs */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-transparent blur-3xl pointer-events-none rounded-full"></div>
+    <div className="p-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all duration-300">
+      <div className={`text-2xl sm:text-3xl font-extrabold ${color}`}>
+        {animatedValue.toLocaleString()}+
+      </div>
+      <div className="text-xs text-slate-400 font-medium mt-1">{label}</div>
+    </div>
+  );
+};
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+const HeroSection = ({ stats }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const quickSearchTags = [
+    { label: 'Mathematics', path: '/past-papers/ol/mathematics' },
+    { label: 'Physics', path: '/past-papers/al/physics' },
+    { label: 'ICT', path: '/past-papers/al/ict' },
+    { label: 'Chemistry', path: '/past-papers/al/chemistry' },
+    { label: 'Biology', path: '/past-papers/al/biology' },
+    { label: 'Accounting', path: '/past-papers/al/accounting' },
+    { label: 'O/L Papers', path: '/past-papers/ol' },
+    { label: 'A/L Papers', path: '/past-papers/al' },
+  ];
+
+  return (
+    <section className="relative overflow-hidden pt-10 pb-16 lg:pt-14 lg:pb-24 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 text-white rounded-3xl shadow-2xl mb-12">
+      {/* Subtle Background Glow Orbs */}
+      <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 translate-y-12 -translate-x-12 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-10">
+        
+        {/* Top Header Badge */}
+        <div className="text-center space-y-4 max-w-4xl mx-auto">
           
-          {/* Left Column - Hero Content */}
-          <div className="lg:col-span-7 text-center lg:text-left space-y-6">
-            
-            {/* Tagline Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-semibold uppercase tracking-wider shadow-xs">
-              <FaMagic className="text-purple-600 animate-pulse" />
-              <span>Smart Education Platform</span>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
-              Learn Smarter.{' '}
-              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Achieve More.
-              </span>
-            </h1>
-
-            {/* Description */}
-            <p className="text-lg sm:text-xl text-slate-600 leading-relaxed font-normal max-w-2xl mx-auto lg:mx-0">
-              Free educational resources, smart calculators, digital tools and AI learning guides for students and learners.
-            </p>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-              <Link
-                to="/tools"
-                className="w-full sm:w-auto px-7 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-2xl shadow-lg shadow-blue-500/25 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02]"
-              >
-                <span>Explore Tools</span>
-                <FaArrowRight className="text-sm" />
-              </Link>
-
-              <Link
-                to="/education"
-                className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-2xl shadow-xs transition-all duration-200 flex items-center justify-center gap-2 hover:border-slate-300"
-              >
-                <span>Start Learning</span>
-                <FaBookReader className="text-slate-400 text-sm" />
-              </Link>
-            </div>
-
-            {/* Platform Highlights */}
-            <div className="pt-6 border-t border-slate-200/80 grid grid-cols-3 gap-4 max-w-lg mx-auto lg:mx-0 text-left">
-              <div>
-                <span className="text-2xl font-bold text-slate-900 block">100% Free</span>
-                <span className="text-xs text-slate-500">No registration fees</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-slate-900 block">Fast Tools</span>
-                <span className="text-xs text-slate-500">Instant calculations</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-slate-900 block">AI Ready</span>
-                <span className="text-xs text-slate-500">Smart student guides</span>
-              </div>
-            </div>
-
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-400 text-xs font-extrabold uppercase tracking-wider backdrop-blur-md animate-fade-in-down">
+            <FaFilePdf className="text-blue-400" />
+            <span>Sri Lanka's Dedicated Past Papers Library</span>
           </div>
 
-          {/* Right Column - Visual Abstract Tech Graphic */}
-          <div className="lg:col-span-5 relative">
-            <div className="relative mx-auto max-w-md lg:max-w-none">
-              
-              {/* Central Visual Card */}
-              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/50 space-y-6 relative z-10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
-                      <FaCalculator className="text-2xl" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-base">GPA Calculator</h3>
-                      <p className="text-xs text-slate-500">Instant Grade Computation</p>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[11px] font-bold rounded-lg border border-emerald-200">
-                    Active Tool
-                  </span>
-                </div>
+          {/* Main Headline */}
+          <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-tight animate-fade-in-up delay-100">
+            Sri Lankan Past Papers,{' '}
+            <span className="text-gradient-shimmer">
+              All in One Place.
+            </span>
+          </h1>
 
-                {/* Abstract Interactive Graphic Bars */}
-                <div className="space-y-3 pt-2">
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600 font-medium">
-                      <span>Semester Performance</span>
-                      <span className="text-blue-600 font-bold">3.85 GPA</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full w-[90%]"></div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600 font-medium">
-                      <span>AI Smart Quiz Preparation</span>
-                      <span className="text-purple-600 font-bold">Completed</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-gradient-to-r from-purple-600 to-pink-600 h-full rounded-full w-[100%]"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini Features List */}
-                <div className="pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <FaCheckCircle className="text-emerald-500" />
-                    <span>Real-time Sri Lankan Syllabus Alignment</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaCheckCircle className="text-emerald-500" />
-                    <span>100% Client-Side Privacy Guaranteed</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Badge 1 (Top Right) */}
-              <div className="absolute -top-6 -right-6 bg-purple-600 text-white p-4 rounded-2xl shadow-lg shadow-purple-500/30 flex items-center gap-3 animate-bounce duration-[3000ms] hidden sm:flex z-20">
-                <FaBrain className="text-2xl" />
-                <div>
-                  <p className="text-xs font-semibold">AI Learning</p>
-                  <p className="text-[10px] text-purple-200">Smart Prompt Guides</p>
-                </div>
-              </div>
-
-              {/* Floating Badge 2 (Bottom Left) */}
-              <div className="absolute -bottom-6 -left-6 bg-white border border-slate-200 text-slate-900 p-4 rounded-2xl shadow-lg flex items-center gap-3 hidden sm:flex z-20">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                  <FaMagic className="text-lg" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold">Free Tools Hub</p>
-                  <p className="text-[10px] text-slate-500">6+ Student Utilities</p>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
+          {/* Subtitle */}
+          <p className="text-base sm:text-xl text-slate-300 font-medium max-w-2xl mx-auto leading-relaxed animate-fade-in-up delay-150">
+            {SITE_CONFIG.heroSubtitle}
+          </p>
         </div>
+
+        {/* Prominent Search Bar with Focus Glow */}
+        <div className="max-w-3xl mx-auto space-y-4 animate-fade-in-up delay-200">
+          <form onSubmit={handleSearchSubmit} className="relative flex items-center group">
+            <div className="relative w-full">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search subjects, years, papers (e.g. Mathematics, 2025 O/L)..."
+                className="w-full pl-12 pr-36 py-4 sm:py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white/15 focus:ring-4 focus:ring-blue-500/20 transition-all shadow-xl"
+              />
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg group-focus-within:text-blue-400 transition-colors" />
+            </div>
+
+            <button
+              type="submit"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 px-5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center gap-2 btn-press"
+            >
+              <span>Search</span>
+              <FaArrowRight className="text-xs hidden sm:inline group-hover:translate-x-1 transition-transform" />
+            </button>
+          </form>
+
+          {/* Quick Search Chips */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+            <span className="text-slate-400 font-semibold mr-1">Popular Searches:</span>
+            {quickSearchTags.map((tag) => (
+              <Link
+                key={tag.label}
+                to={tag.path}
+                className="px-3 py-1 bg-white/5 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 text-slate-300 hover:text-blue-300 rounded-lg text-xs transition-all hover:-translate-y-0.5"
+              >
+                {tag.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Primary & Secondary Action CTAs */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2 animate-fade-in-up delay-250">
+          <Link
+            to="/past-papers"
+            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold rounded-2xl shadow-xl shadow-blue-600/30 transition-all flex items-center justify-center gap-3 text-sm hover:scale-[1.02] btn-press group"
+          >
+            <FaFilePdf className="text-base" />
+            <span>Browse Past Papers</span>
+            <FaArrowRight className="text-xs group-hover:translate-x-1 transition-transform" />
+          </Link>
+
+          <Link
+            to="/past-papers/ol"
+            className="w-full sm:w-auto px-8 py-4 bg-white/10 hover:bg-white/15 text-white font-extrabold border border-white/20 rounded-2xl backdrop-blur-md transition-all flex items-center justify-center gap-2 text-sm btn-press"
+          >
+            <FaBookReader className="text-blue-400" />
+            <span>Explore O/L Papers</span>
+          </Link>
+        </div>
+
+        {/* Aggregate Stats Summary with Animated Count-Up */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-8 border-t border-white/10 text-center max-w-4xl mx-auto animate-fade-in-up delay-300">
+          <StatCounter value={stats?.totalPapers} fallback={100} label="Past Papers" color="text-blue-400" />
+          <StatCounter value={(stats?.olSubjectsCount || 8) + (stats?.alSubjectsCount || 11)} fallback={19} label="Exam Subjects" color="text-indigo-400" />
+          <StatCounter value={stats?.universityCount} fallback={5} label="Universities" color="text-purple-400" />
+          <StatCounter value={stats?.totalDownloads} fallback={1000} label="Downloads Serviced" color="text-emerald-400" />
+        </div>
+
       </div>
     </section>
   );

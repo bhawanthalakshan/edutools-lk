@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaFilePdf, FaDownload, FaArrowLeft, FaCalendarAlt, FaLanguage, FaFileAlt, FaEye, FaShieldAlt } from 'react-icons/fa';
+import { FaFilePdf, FaDownload, FaArrowLeft, FaCalendarAlt, FaLanguage, FaFileAlt, FaEye, FaShieldAlt, FaCheck } from 'react-icons/fa';
 import Seo from '../../components/Seo';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import PastPaperCard from '../../components/PastPaperCard';
 import AdPlaceholder from '../../components/AdPlaceholder';
 import { getPastPaperBySlug, triggerPastPaperDownload } from '../../services/pastPaperService';
+import { SITE_CONFIG } from '../../config/siteConfig';
 
 const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return 'PDF Document';
@@ -21,6 +22,7 @@ const PastPaperDetail = () => {
   const [relatedPapers, setRelatedPapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [downloaded, setDownloaded] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -41,20 +43,21 @@ const PastPaperDetail = () => {
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-slate-400 text-sm animate-pulse">
-        Loading document details...
+      <div className="py-24 text-center text-slate-400 text-sm animate-pulse space-y-3">
+        <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <span>Loading document details...</span>
       </div>
     );
   }
 
   if (error || !paper) {
     return (
-      <div className="py-16 max-w-xl mx-auto text-center space-y-4 px-4">
+      <div className="py-16 max-w-xl mx-auto text-center space-y-4 px-4 animate-fade-in-up">
         <h1 className="text-2xl font-bold text-slate-900">Document Not Found</h1>
         <p className="text-xs text-slate-500">{error || 'The requested past paper could not be located.'}</p>
         <Link
           to="/past-papers"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold btn-press"
         >
           <FaArrowLeft /> Return to Past Papers Directory
         </Link>
@@ -64,16 +67,18 @@ const PastPaperDetail = () => {
 
   const handleDownloadClick = () => {
     triggerPastPaperDownload(paper._id);
+    setDownloaded(true);
     setPaper((prev) => ({ ...prev, downloadCount: prev.downloadCount + 1 }));
+    setTimeout(() => setDownloaded(false), 3000);
   };
 
   const levelPath = paper.examType === 'OL' ? '/past-papers/ol' : paper.examType === 'AL' ? '/past-papers/al' : '/past-papers/university';
 
   return (
-    <div className="py-8 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-8 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 animate-fade-in-up">
       <Seo
         title={`${paper.title} PDF Download`}
-        description={`Download the ${paper.year} ${paper.examType} ${paper.subject} ${paper.paperType} PDF in ${paper.medium} medium from EduTools LK.`}
+        description={`Download the ${paper.year} ${paper.examType} ${paper.subject} ${paper.paperType} PDF in ${paper.medium} medium from ${SITE_CONFIG.name}.`}
         jsonLd={{
           '@context': 'https://schema.org',
           '@type': 'DigitalDocument',
@@ -94,7 +99,7 @@ const PastPaperDetail = () => {
       />
 
       {/* Main Document Detail Card */}
-      <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-md space-y-8">
+      <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/90 shadow-md space-y-8 animate-scale-up">
         
         {/* Header Block */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 pb-6 border-b border-slate-100">
@@ -130,36 +135,48 @@ const PastPaperDetail = () => {
 
           <button
             onClick={handleDownloadClick}
-            className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md transition-all shrink-0"
+            className={`px-7 py-3.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all shrink-0 btn-press ${
+              downloaded
+                ? 'bg-emerald-600 text-white'
+                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/25'
+            }`}
           >
-            <FaDownload className="text-sm" /> Download PDF File
+            {downloaded ? (
+              <>
+                <FaCheck className="text-sm" /> Downloaded
+              </>
+            ) : (
+              <>
+                <FaDownload className="text-sm" /> Download PDF File
+              </>
+            )}
           </button>
         </div>
 
         {/* Specification Details Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1 hover:border-slate-200 transition-colors">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <FaFileAlt /> Subject
             </span>
             <p className="font-bold text-slate-900 text-sm truncate">{paper.subject}</p>
           </div>
 
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1 hover:border-slate-200 transition-colors">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <FaCalendarAlt /> Exam Year
             </span>
             <p className="font-bold text-slate-900 text-sm">{paper.year}</p>
           </div>
 
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1 hover:border-slate-200 transition-colors">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <FaLanguage /> Language
             </span>
             <p className="font-bold text-slate-900 text-sm">{paper.medium}</p>
           </div>
 
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-1 hover:border-slate-200 transition-colors">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <FaEye /> Downloads
             </span>
@@ -181,10 +198,10 @@ const PastPaperDetail = () => {
         <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl text-[11px] text-slate-500 space-y-1 flex items-start gap-2">
           <FaShieldAlt className="text-slate-400 text-sm shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold text-slate-700">Source & Educational Rights Notice:</span>
+            <span className="font-bold text-slate-700">Source &amp; Educational Rights Notice:</span>
             <p>
               Uploaded by authorized administrators from: <em>{paper.source || 'Official Department / Teacher Contribution'}</em>.
-              EduTools LK distributes past papers exclusively for non-commercial student learning and exam preparation.
+              {SITE_CONFIG.name} distributes past papers exclusively for non-commercial student learning and exam preparation.
             </p>
           </div>
         </div>

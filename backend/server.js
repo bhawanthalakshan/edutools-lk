@@ -20,6 +20,7 @@ const pastPaperRoutes = require('./routes/pastPaperRoutes');
 const subjectRoutes = require('./routes/subjectRoutes');
 const universityRoutes = require('./routes/universityRoutes');
 const sitemapRoutes = require('./routes/sitemapRoutes');
+const robotsRoutes = require('./routes/robotsRoutes');
 const dns = require("dns");
 // Middleware Imports
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
@@ -109,12 +110,13 @@ app.use('/api/past-papers', pastPaperRoutes);
 app.use('/api/subjects', subjectRoutes);
 app.use('/api/universities', universityRoutes);
 app.use('/sitemap.xml', sitemapRoutes);
+app.use('/robots.txt', robotsRoutes);
 
 // Root route
 app.get('/', (req, res) => {
   res.json({
-    message: 'Welcome to EduTools LK API',
-    tagline: 'Learn Smart. Achieve More.',
+    message: 'Welcome to Examora API',
+    tagline: 'Find. Practice. Achieve.',
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
@@ -124,6 +126,8 @@ app.get('/', (req, res) => {
       articles: '/api/articles',
       tools: '/api/tools',
       pastPapers: '/api/past-papers',
+      sitemap: '/sitemap.xml',
+      robots: '/robots.txt',
     },
   });
 });

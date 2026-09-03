@@ -332,7 +332,7 @@ const AdminPastPapers = () => {
 
   return (
     <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-      <Seo title="Admin Past Papers Management - EduTools LK" description="Upload, edit, and organize educational past paper archives." />
+      <Seo title="Admin Past Papers Management" description="Upload, edit, and organize educational past paper archives on Examora." />
 
       {/* Header & Main Stats Bar */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm space-y-6">
@@ -635,8 +635,8 @@ const AdminPastPapers = () => {
 
       {/* PAPER UPLOAD & EDIT MODAL */}
       {isPaperModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-modal-backdrop">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-scale-up">
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -787,7 +787,7 @@ const AdminPastPapers = () => {
                     className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                   />
                   <span className="text-xs font-bold text-amber-950 leading-snug">
-                    I explicitly confirm that I have permission to distribute this file on EduTools LK. *
+                    I explicitly confirm that I have permission to distribute this file on Examora. *
                   </span>
                 </label>
               </div>

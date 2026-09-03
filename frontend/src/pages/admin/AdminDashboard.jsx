@@ -255,7 +255,7 @@ const AdminDashboard = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg uppercase tracking-wider">
-              EduTools LK Admin Portal
+              Examora Admin Portal
             </span>
             <h1 className="text-2xl font-extrabold text-slate-900 mt-1">
               Welcome back, {user?.name || 'Administrator'}
@@ -583,8 +583,8 @@ const AdminDashboard = () => {
 
       {/* CRUD Form Modals */}
       {modalType && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-modal-backdrop">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-scale-up">
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h3 className="text-xl font-bold text-slate-900 capitalize">

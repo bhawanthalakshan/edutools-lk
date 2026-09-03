@@ -41,8 +41,8 @@ const AdminLogin = () => {
               <FaGraduationCap className="text-2xl" />
             </div>
           </Link>
-          <h1 className="text-2xl font-extrabold text-slate-900">EduTools LK Admin</h1>
-          <p className="text-xs text-slate-500">Log in to access the control dashboard.</p>
+          <h1 className="text-2xl font-extrabold text-slate-900">Examora Admin</h1>
+          <p className="text-xs text-slate-500">Log in to access the past papers control dashboard.</p>
         </div>
 
         {/* Error Alert */}

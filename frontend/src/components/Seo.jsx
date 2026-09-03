@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
-import { SITE_CONFIG, getCanonicalUrl } from '../config/seoConfig';
+import { SITE_CONFIG, getCanonicalUrl, getPageTitle } from '../config/siteConfig';
 
 const Seo = ({ title, description, image, type = 'website', jsonLd = null }) => {
   useEffect(() => {
-    const baseTitle = SITE_CONFIG.name;
-    const tagline = 'Learn Smart. Achieve More.';
-    const fullTitle = title ? `${title} | ${baseTitle}` : `${baseTitle} - ${tagline}`;
+    const fullTitle = getPageTitle(title);
     const finalDesc = description || SITE_CONFIG.defaultDescription;
     const canonicalUrl = getCanonicalUrl(window.location.pathname);
     const finalOgImage = image || SITE_CONFIG.defaultOgImage;
@@ -34,7 +32,7 @@ const Seo = ({ title, description, image, type = 'website', jsonLd = null }) => 
     setMetaTag('meta[property="og:type"]', 'property', 'og:type', type);
     setMetaTag('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
     setMetaTag('meta[property="og:image"]', 'property', 'og:image', finalOgImage);
-    setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', baseTitle);
+    setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', SITE_CONFIG.name);
 
     // 4. Twitter / X Card Tags
     setMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary_large_image');

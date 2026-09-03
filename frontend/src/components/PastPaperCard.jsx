@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaFilePdf, FaDownload, FaCalendarAlt, FaLanguage, FaFileAlt } from 'react-icons/fa';
+import { FaFilePdf, FaDownload, FaCalendarAlt, FaLanguage, FaFileAlt, FaCheck, FaArrowRight } from 'react-icons/fa';
 import { triggerPastPaperDownload } from '../services/pastPaperService';
 
 // Format bytes into human-readable size
@@ -13,12 +13,22 @@ const formatFileSize = (bytes) => {
 };
 
 const PastPaperCard = ({ paper }) => {
+  const [downloading, setDownloading] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+
   if (!paper) return null;
 
   const handleDownload = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setDownloading(true);
     triggerPastPaperDownload(paper._id);
+
+    setTimeout(() => {
+      setDownloading(false);
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 2500);
+    }, 400);
   };
 
   const getExamBadgeColor = (type) => {
@@ -35,12 +45,12 @@ const PastPaperCard = ({ paper }) => {
   };
 
   return (
-    <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-xl hover:border-blue-300 transition-all flex flex-col justify-between group space-y-4">
+    <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 hover:scale-[1.01] transition-all duration-300 flex flex-col justify-between group space-y-4">
       
       {/* Top Header Row */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 shrink-0">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 shrink-0 group-hover:scale-105 transition-transform">
             <FaFilePdf className="text-2xl" />
           </div>
           <div className="flex flex-wrap items-center gap-1.5 justify-end">
@@ -84,17 +94,34 @@ const PastPaperCard = ({ paper }) => {
       <div className="flex items-center justify-between gap-3 pt-1">
         <Link
           to={`/past-papers/${paper.slug}`}
-          className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+          className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1 group/link"
         >
-          View Details
+          <span>View Details</span>
+          <FaArrowRight className="text-[9px] text-slate-400 group-hover/link:translate-x-1 transition-transform" />
         </Link>
 
         <button
           onClick={handleDownload}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+          disabled={downloading}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all shrink-0 btn-press ${
+            downloaded
+              ? 'bg-emerald-600 text-white'
+              : downloading
+              ? 'bg-blue-500 text-white opacity-80'
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
         >
-          <FaDownload className="text-xs" />
-          <span>Download PDF</span>
+          {downloaded ? (
+            <>
+              <FaCheck className="text-xs" />
+              <span>Downloaded</span>
+            </>
+          ) : (
+            <>
+              <FaDownload className={`text-xs ${downloading ? 'animate-pulse' : ''}`} />
+              <span>{downloading ? 'Starting...' : 'Download PDF'}</span>
+            </>
+          )}
         </button>
       </div>
 

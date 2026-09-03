@@ -4,7 +4,9 @@ const Course = require('../models/Course');
 const Module = require('../models/Module');
 const PastPaper = require('../models/PastPaper');
 
-const BASE_URL = process.env.CLIENT_URL || 'https://edutools-lk.vercel.app';
+const { getClientUrl } = require('../config/siteConfig');
+
+const BASE_URL = getClientUrl();
 
 const generateSitemap = async (req, res, next) => {
   try {

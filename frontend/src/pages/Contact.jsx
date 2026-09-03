@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FaEnvelope, FaPaperPlane, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 import Seo from '../components/Seo';
 import api from '../services/api';
+import { SITE_CONFIG } from '../config/siteConfig';
 
 const Contact = () => {
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
@@ -52,7 +53,7 @@ const Contact = () => {
     <div className="py-12 max-w-2xl mx-auto px-4 sm:px-6 space-y-8">
       <Seo
         title="Contact Us"
-        description="Contact the EduTools LK team with questions, feedback, or tool suggestions."
+        description={`Contact the ${SITE_CONFIG.name} team with questions, past paper requests, or feedback.`}
       />
 
       <div className="flex items-center gap-4 border-b border-slate-200 pb-6">
@@ -61,7 +62,7 @@ const Contact = () => {
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900">Contact Us</h1>
-          <p className="text-sm text-slate-500">Have questions, feedback, or tool requests? Get in touch with us.</p>
+          <p className="text-sm text-slate-500">Have questions, paper requests, or feedback? Get in touch with us.</p>
         </div>
       </div>
 
@@ -73,7 +74,7 @@ const Contact = () => {
             </div>
             <h2 className="text-2xl font-bold text-slate-900">Message Sent Successfully!</h2>
             <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
-              Thank you for reaching out to EduTools LK. We have received your inquiry and will respond shortly.
+              Thank you for reaching out to {SITE_CONFIG.name}. We have received your message and will get back to you shortly.
             </p>
             <button
               onClick={() => setSubmitted(false)}
