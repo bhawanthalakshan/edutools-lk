@@ -569,6 +569,53 @@ const autoImportPastPapers = async (req, res, next) => {
   }
 };
 
+// @desc    Publish ALL draft past papers
+// @route   POST /api/past-papers/publish-drafts
+// @access  Private/Admin
+const publishDraftPapers = async (req, res, next) => {
+  try {
+    const result = await PastPaper.updateMany(
+      { status: 'draft' },
+      { $set: { status: 'published' } }
+    );
+
+    res.status(200).json({
+      success: true,
+      count: result.modifiedCount || 0,
+      message: `${result.modifiedCount || 0} draft papers published successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Publish SELECTED draft past papers by IDs
+// @route   POST /api/past-papers/publish-selected
+// @access  Private/Admin
+const publishSelectedPapers = async (req, res, next) => {
+  try {
+    const { paperIds = [] } = req.body || {};
+
+    if (!Array.isArray(paperIds) || paperIds.length === 0) {
+      res.status(400);
+      throw new Error('Please select at least one draft paper to publish.');
+    }
+
+    const result = await PastPaper.updateMany(
+      { _id: { $in: paperIds }, status: 'draft' },
+      { $set: { status: 'published' } }
+    );
+
+    res.status(200).json({
+      success: true,
+      count: result.modifiedCount || 0,
+      message: `${result.modifiedCount || 0} selected draft papers published successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPastPapers,
   getPastPaperStats,
@@ -579,4 +626,6 @@ module.exports = {
   deletePastPaper,
   togglePastPaperStatus,
   autoImportPastPapers,
+  publishDraftPapers,
+  publishSelectedPapers,
 };

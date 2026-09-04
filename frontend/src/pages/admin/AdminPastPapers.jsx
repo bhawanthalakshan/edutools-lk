@@ -44,16 +44,9 @@ import {
   updatePastPaper, 
   deletePastPaper, 
   togglePastPaperStatus,
-  autoImportPastPapers,
-  getPastPaperStats,
-  getSubjects,
-  createSubject,
-  getUniversities,
-  createUniversity,
-  getCourses,
-  createCourse,
-  getModules,
-  createModule
+  createModule,
+  publishDraftPapers,
+  publishSelectedPapers
 } from '../../services/pastPaperService';
 
 const formatFileSize = (bytes) => {
@@ -151,8 +144,10 @@ const AdminPastPapers = () => {
   const [isUniModalOpen, setIsUniModalOpen] = useState(false);
   const [newUniData, setNewUniData] = useState({ name: '', slug: '', description: '' });
 
-  // ── Auto Import State ─────────────────────────────────────────
+  // ── Auto Import & Bulk Actions State ─────────────────────────────
   const [importing, setImporting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [selectedPaperIds, setSelectedPaperIds] = useState(new Set());
   const importCancelledRef = React.useRef(false);
   const [importProgress, setImportProgress] = useState({
     totalDiscovered: 0,
@@ -288,6 +283,52 @@ const AdminPastPapers = () => {
       ...prev,
       statusText: 'Stopping import after current batch finishes...',
     }));
+  };
+
+  const handlePublishAllDrafts = async () => {
+    const draftCount = stats.draftPapers !== undefined ? stats.draftPapers : papers.filter(p => p.status === 'draft').length;
+    if (draftCount === 0) return;
+
+    if (!window.confirm(`Are you sure you want to publish all ${draftCount} draft past papers?\n\nNote: permissionConfirmed will remain unchanged.`)) {
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const res = await publishDraftPapers();
+      if (res?.success) {
+        alert(res.message || `${res.count} draft papers published successfully.`);
+        setSelectedPaperIds(new Set());
+        fetchAllData();
+      }
+    } catch (err) {
+      alert('Publish drafts error: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handlePublishSelected = async () => {
+    const selectedArray = Array.from(selectedPaperIds);
+    if (selectedArray.length === 0) return;
+
+    if (!window.confirm(`Are you sure you want to publish ${selectedArray.length} selected paper(s)?`)) {
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const res = await publishSelectedPapers(selectedArray);
+      if (res?.success) {
+        alert(res.message || `${res.count} selected paper(s) published successfully.`);
+        setSelectedPaperIds(new Set());
+        fetchAllData();
+      }
+    } catch (err) {
+      alert('Publish selected error: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setPublishing(false);
+    }
   };
 
   // Fetch Stats & Subjects / Papers
@@ -541,10 +582,10 @@ const AdminPastPapers = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={fetchAllData}
-              disabled={importing}
+              disabled={importing || publishing}
               className="px-4 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors shrink-0"
               title="Reload database counts"
             >
@@ -552,10 +593,33 @@ const AdminPastPapers = () => {
               Refresh Counts
             </button>
 
+            {/* Bulk Publish All Drafts Button */}
+            <button
+              onClick={handlePublishAllDrafts}
+              disabled={importing || publishing || (stats.draftPapers || 0) === 0}
+              className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
+              title="Publish all draft papers after review"
+            >
+              <FaCheckCircle />
+              Publish All Draft Papers ({(stats.draftPapers !== undefined ? stats.draftPapers : papers.filter(p => p.status === 'draft').length)})
+            </button>
+
+            {/* Publish Selected Button */}
+            {selectedPaperIds.size > 0 && (
+              <button
+                onClick={handlePublishSelected}
+                disabled={importing || publishing}
+                className="px-4 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0 animate-pulse"
+              >
+                <FaCheckCircle />
+                Publish Selected ({selectedPaperIds.size})
+              </button>
+            )}
+
             {!importing ? (
               <button
                 onClick={() => handleStartAutoImport()}
-                disabled={importing}
+                disabled={importing || publishing}
                 className="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
               >
                 <FaCloudUploadAlt />
@@ -573,7 +637,7 @@ const AdminPastPapers = () => {
 
             <button
               onClick={openCreatePaperModal}
-              disabled={importing}
+              disabled={importing || publishing}
               className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
             >
               <FaPlus /> Upload New Past Paper
@@ -862,6 +926,25 @@ const AdminPastPapers = () => {
                 <table className="w-full text-left text-xs text-slate-600 border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-700 font-bold uppercase text-[11px]">
+                      <th className="py-3.5 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            filteredPapers.filter(p => p.status === 'draft').length > 0 &&
+                            filteredPapers.filter(p => p.status === 'draft').every(p => selectedPaperIds.has(p._id))
+                          }
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const draftIds = filteredPapers.filter(p => p.status === 'draft').map(p => p._id);
+                              setSelectedPaperIds(new Set([...selectedPaperIds, ...draftIds]));
+                            } else {
+                              const draftIds = new Set(filteredPapers.filter(p => p.status === 'draft').map(p => p._id));
+                              setSelectedPaperIds(new Set([...selectedPaperIds].filter(id => !draftIds.has(id))));
+                            }
+                          }}
+                          className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </th>
                       <th className="py-3.5 px-4">Title</th>
                       <th className="py-3.5 px-4">Exam</th>
                       <th className="py-3.5 px-4">Subject</th>
@@ -876,6 +959,23 @@ const AdminPastPapers = () => {
                   <tbody className="divide-y divide-slate-100">
                     {filteredPapers.map((paper) => (
                       <tr key={paper._id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-3 text-center">
+                          {paper.status === 'draft' ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedPaperIds.has(paper._id)}
+                              onChange={(e) => {
+                                const next = new Set(selectedPaperIds);
+                                if (e.target.checked) next.add(paper._id);
+                                else next.delete(paper._id);
+                                setSelectedPaperIds(next);
+                              }}
+                              className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
                         <td className="py-3.5 px-4 font-semibold text-slate-900">
                           <div className="flex items-center gap-2">
                             <FaFilePdf className="text-rose-500 shrink-0" />
