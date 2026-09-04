@@ -23,25 +23,43 @@ const getSubjects = async (req, res, next) => {
 
     const subjects = await Subject.find(query).sort({ order: 1, name: 1 });
 
-    // Calculate paper count for each subject
+    // Calculate paper counts (published vs draft) for each subject
     const subjectsWithCounts = await Promise.all(
       subjects.map(async (subj) => {
-        const paperCount = await PastPaper.countDocuments({
+        const nameEscaped = subj.name.replace(/[^a-zA-Z0-9\s]/g, '\\$&');
+        const searchConditions = [{ subjectId: subj._id }, { subject: { $regex: new RegExp(`^${nameEscaped}$`, 'i') } }];
+
+        if (subj.name.toLowerCase().includes('ict') || subj.name.toLowerCase().includes('information')) {
+          searchConditions.push({ subject: { $regex: /ict|information\s*(&|and)\s*communication\s*technology/i } });
+        }
+
+        const publishedPaperCount = await PastPaper.countDocuments({
           examType: subj.examType,
-          $or: [{ subjectId: subj._id }, { subject: { $regex: new RegExp(`^${subj.name}$`, 'i') } }],
+          $or: searchConditions,
           status: 'published',
         });
+
+        const draftPaperCount = await PastPaper.countDocuments({
+          examType: subj.examType,
+          $or: searchConditions,
+          status: 'draft',
+        });
+
+        const totalCount = publishedPaperCount + draftPaperCount;
+        const paperCount = all === 'true' ? totalCount : publishedPaperCount;
 
         // Find latest available paper year
         const latestPaper = await PastPaper.findOne({
           examType: subj.examType,
-          $or: [{ subjectId: subj._id }, { subject: { $regex: new RegExp(`^${subj.name}$`, 'i') } }],
-          status: 'published',
+          $or: searchConditions,
+          ...(all === 'true' ? {} : { status: 'published' }),
         }).sort({ year: -1 });
 
         return {
           ...subj.toObject(),
           paperCount,
+          publishedPaperCount,
+          draftPaperCount,
           latestYear: latestPaper ? latestPaper.year : null,
         };
       })

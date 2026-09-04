@@ -3,7 +3,7 @@ const path = require('path');
 const cloudinary = require('./cloudinary');
 
 const MAX_FILE_SIZE =
-  parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
+  parseInt(process.env.MAX_FILE_SIZE, 10) || 50 * 1024 * 1024;
 
 // Use memory storage because the PDF will be uploaded directly to Cloudinary.
 const memoryStorage = multer.memoryStorage();

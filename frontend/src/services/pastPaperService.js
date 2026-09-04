@@ -7,8 +7,8 @@ export const getPastPapers = async (params = {}) => {
 };
 
 // Fetch aggregate past paper stats for hub & admin
-export const getPastPaperStats = async () => {
-  const response = await api.get('/past-papers/stats');
+export const getPastPaperStats = async (params = {}) => {
+  const response = await api.get('/past-papers/stats', { params });
   return response.data;
 };
 

@@ -146,10 +146,16 @@ const getPastPapers = async (req, res, next) => {
 // @access  Public
 const getPastPaperStats = async (req, res, next) => {
   try {
-    const totalPapers = await PastPaper.countDocuments({ status: 'published' });
-    const olPapers = await PastPaper.countDocuments({ examType: 'OL', status: 'published' });
-    const alPapers = await PastPaper.countDocuments({ examType: 'AL', status: 'published' });
-    const universityPapers = await PastPaper.countDocuments({ examType: 'UNIVERSITY', status: 'published' });
+    const { all } = req.query;
+    const statusQuery = all === 'true' ? {} : { status: 'published' };
+
+    const totalPapers = await PastPaper.countDocuments(statusQuery);
+    const publishedPapers = await PastPaper.countDocuments({ status: 'published' });
+    const draftPapers = await PastPaper.countDocuments({ status: 'draft' });
+
+    const olPapers = await PastPaper.countDocuments({ examType: 'OL', ...statusQuery });
+    const alPapers = await PastPaper.countDocuments({ examType: 'AL', ...statusQuery });
+    const universityPapers = await PastPaper.countDocuments({ examType: 'UNIVERSITY', ...statusQuery });
 
     const olSubjectsCount = await Subject.countDocuments({ examType: 'OL', active: true });
     const alSubjectsCount = await Subject.countDocuments({ examType: 'AL', active: true });
@@ -165,6 +171,8 @@ const getPastPaperStats = async (req, res, next) => {
       success: true,
       data: {
         totalPapers,
+        publishedPapers,
+        draftPapers,
         olPapers,
         alPapers,
         universityPapers,
@@ -535,7 +543,7 @@ const togglePastPaperStatus = async (req, res, next) => {
 // @access  Private/Admin
 const autoImportPastPapers = async (req, res, next) => {
   try {
-    const { startYear = 2016, endYear = 2025, batchSize = 10, cursor = 0 } = req.body || {};
+    const { startYear = 2016, endYear = 2025, batchSize = 10, cursor = 0, itemsToRetry = null } = req.body || {};
     const userId = req.user?._id;
 
     const { autoImportPastPapersService } = require('../utils/paperzoneImporter');
@@ -546,6 +554,7 @@ const autoImportPastPapers = async (req, res, next) => {
       batchSize: Number(batchSize),
       cursor: Number(cursor),
       userId,
+      itemsToRetry,
     });
 
     res.status(200).json({

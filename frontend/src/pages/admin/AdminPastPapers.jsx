@@ -169,8 +169,13 @@ const AdminPastPapers = () => {
   const [importResult, setImportResult] = useState(null);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
 
-  const handleStartAutoImport = async () => {
-    if (!window.confirm('Are you sure you want to auto-import past papers (2016–2025) in batches from PaperZone?')) {
+  const handleStartAutoImport = async (itemsToRetryParam = null) => {
+    const isRetry = Array.isArray(itemsToRetryParam) && itemsToRetryParam.length > 0;
+    const confirmMsg = isRetry
+      ? `Are you sure you want to retry ${itemsToRetryParam.length} failed paper(s)?`
+      : 'Are you sure you want to auto-import past papers (2016–2025) in batches from PaperZone?';
+
+    if (!window.confirm(confirmMsg)) {
       return;
     }
 
@@ -184,10 +189,10 @@ const AdminPastPapers = () => {
     let accumSkipped = 0;
     let accumFailed = 0;
     let accumFailedItems = [];
-    let totalDiscovered = 0;
+    let totalDiscovered = isRetry ? itemsToRetryParam.length : 0;
 
     setImportProgress({
-      totalDiscovered: 0,
+      totalDiscovered,
       processedCount: 0,
       importedCount: 0,
       skippedCount: 0,
@@ -196,7 +201,7 @@ const AdminPastPapers = () => {
       nextCursor: 0,
       hasMore: true,
       failedItems: [],
-      statusText: 'Initializing PaperZone batch discovery...',
+      statusText: isRetry ? 'Retrying failed resources...' : 'Initializing PaperZone batch discovery...',
     });
 
     try {
@@ -208,12 +213,18 @@ const AdminPastPapers = () => {
           statusText: `Processing Batch #${currentBatchNum}...`,
         }));
 
-        const res = await autoImportPastPapers({
+        const payload = {
           startYear: 2016,
           endYear: 2025,
           batchSize,
           cursor,
-        });
+        };
+
+        if (isRetry) {
+          payload.itemsToRetry = itemsToRetryParam;
+        }
+
+        const res = await autoImportPastPapers(payload);
 
         if (!res?.success) {
           alert('Batch import error: ' + (res?.message || 'Failed batch response from server'));
@@ -283,7 +294,7 @@ const AdminPastPapers = () => {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const statsRes = await getPastPaperStats().catch(() => null);
+      const statsRes = await getPastPaperStats({ all: true }).catch(() => null);
       if (statsRes?.data) setStats(statsRes.data);
 
       const subjectsRes = await getSubjects({ all: true }).catch(() => ({ data: [] }));
@@ -531,9 +542,19 @@ const AdminPastPapers = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={fetchAllData}
+              disabled={importing}
+              className="px-4 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors shrink-0"
+              title="Reload database counts"
+            >
+              <FaCog />
+              Refresh Counts
+            </button>
+
             {!importing ? (
               <button
-                onClick={handleStartAutoImport}
+                onClick={() => handleStartAutoImport()}
                 disabled={importing}
                 className="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
               >
@@ -625,6 +646,9 @@ const AdminPastPapers = () => {
           <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
             <span className="text-slate-400 font-semibold block">Total Papers</span>
             <span className="text-lg font-black text-slate-900">{stats.totalPapers}</span>
+            <span className="text-[10px] text-slate-500 font-medium block">
+              {stats.publishedPapers !== undefined ? `${stats.publishedPapers} pub · ${stats.draftPapers || 0} draft` : ''}
+            </span>
           </div>
           <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-100">
             <span className="text-blue-600 font-semibold block">O/L Papers</span>
@@ -1548,7 +1572,21 @@ const AdminPastPapers = () => {
               </div>
             )}
 
-            <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              {importResult.failedItems && importResult.failedItems.length > 0 ? (
+                <button
+                  onClick={() => {
+                    const itemsToRetry = importResult.failedItems;
+                    setShowImportResultModal(false);
+                    handleStartAutoImport(itemsToRetry);
+                  }}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors"
+                >
+                  <FaCloudUploadAlt /> Retry Failed Imports ({importResult.failedItems.length})
+                </button>
+              ) : (
+                <div></div>
+              )}
               <button
                 onClick={() => setShowImportResultModal(false)}
                 className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors"

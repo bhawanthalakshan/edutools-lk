@@ -87,6 +87,18 @@ const normalizeMedium = (str) => {
   return 'English';
 };
 
+// Normalize Subject Name for fuzzy matching
+const normalizeSubjectName = (str) => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/information\s+and\s+communication\s+technology/g, 'ict')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 // Normalize Paper Type / Resource Type
 const normalizePaperType = (str) => {
   if (!str) return 'Past Paper';
@@ -179,12 +191,14 @@ const discoverPaperZoneResources = async (startYear = 2016, endYear = 2025) => {
       const gradeName = (item.grade_name || '').toUpperCase();
       const combinedText = `${item.title || ''} ${item.description || ''}`.toUpperCase();
 
-      // Requirement 12: Strict University exclusion
+      // Requirement: Strict University exclusion
       if (
         gradeName.includes('UNI') ||
         gradeName.includes('DEGREE') ||
         combinedText.includes('UNIVERSITY') ||
-        combinedText.includes('DEGREE')
+        combinedText.includes('DEGREE') ||
+        combinedText.includes('CAMPUS') ||
+        combinedText.includes('DIPLOMA')
       ) {
         continue;
       }
@@ -252,6 +266,46 @@ const discoverPaperZoneResources = async (startYear = 2016, endYear = 2025) => {
 };
 
 /**
+ * Robust Subject Resolution Helper
+ */
+const resolveSubjectId = async (examType, rawSubjectName, subjectMap) => {
+  if (!rawSubjectName) return null;
+  const exam = examType.toUpperCase();
+  const rawTrimmed = rawSubjectName.trim();
+  const rawLower = rawTrimmed.toLowerCase();
+  const normalized = normalizeSubjectName(rawTrimmed);
+
+  // 1. Direct Map cache check
+  if (subjectMap.has(`${exam}-${rawLower}`)) {
+    return subjectMap.get(`${exam}-${rawLower}`);
+  }
+  if (subjectMap.has(`${exam}-${normalized}`)) {
+    return subjectMap.get(`${exam}-${normalized}`);
+  }
+
+  // 2. Database query with regex & aliases
+  const escaped = rawTrimmed.replace(/[^a-zA-Z0-9\s]/g, '\\$&');
+  const searchConditions = [{ name: { $regex: new RegExp(`^${escaped}$`, 'i') } }];
+
+  if (normalized.includes('ict') || normalized.includes('information')) {
+    searchConditions.push({ name: { $regex: /ict|information\s*(&|and)\s*communication\s*technology/i } });
+  }
+
+  const foundSub = await Subject.findOne({
+    examType: exam,
+    $or: searchConditions,
+  });
+
+  if (foundSub) {
+    subjectMap.set(`${exam}-${rawLower}`, foundSub._id);
+    subjectMap.set(`${exam}-${normalized}`, foundSub._id);
+    return foundSub._id;
+  }
+
+  return null;
+};
+
+/**
  * Main Auto-Import Service: Processes ONE bounded batch per call
  */
 const autoImportPastPapersService = async ({
@@ -260,6 +314,7 @@ const autoImportPastPapersService = async ({
   batchSize = 10,
   cursor = 0,
   userId = null,
+  itemsToRetry = null,
 } = {}) => {
   const parsedBatchSize = Math.max(1, Math.min(Number(batchSize) || 10, 50));
   const parsedCursor = Math.max(0, Number(cursor) || 0);
@@ -270,9 +325,15 @@ const autoImportPastPapersService = async ({
     skipped: 0,
     failed: 0,
     failedItems: [],
+    unmatchedSubjects: [],
   };
 
-  const discoveredItems = await discoverPaperZoneResources(startYear, endYear);
+  // If specific itemsToRetry are provided, use them directly
+  const discoveredItems =
+    Array.isArray(itemsToRetry) && itemsToRetry.length > 0
+      ? itemsToRetry
+      : await discoverPaperZoneResources(startYear, endYear);
+
   const totalDiscovered = discoveredItems.length;
   stats.discovered = totalDiscovered;
 
@@ -284,6 +345,7 @@ const autoImportPastPapersService = async ({
         imported: 0,
         skipped: 0,
         failed: 0,
+        unmatchedSubjects: [],
       },
       nextCursor: parsedCursor,
       hasMore: false,
@@ -293,16 +355,20 @@ const autoImportPastPapersService = async ({
 
   const batchItems = discoveredItems.slice(parsedCursor, parsedCursor + parsedBatchSize);
 
-  // Pre-cache subjects by name & examType
+  // Pre-cache existing Subjects into subjectMap
   const existingSubjects = await Subject.find({});
   const subjectMap = new Map();
   existingSubjects.forEach((s) => {
-    subjectMap.set(`${s.examType}-${s.name.toLowerCase()}`, s._id);
+    const rawLower = s.name.trim().toLowerCase();
+    const norm = normalizeSubjectName(s.name);
+    subjectMap.set(`${s.examType}-${rawLower}`, s._id);
+    subjectMap.set(`${s.examType}-${norm}`, s._id);
   });
 
   const startTime = Date.now();
   const MAX_BATCH_TIME_MS = 8000; // 8 seconds timeout guard for serverless
   let processedCount = 0;
+  const unmatchedSet = new Set();
 
   for (let i = 0; i < batchItems.length; i++) {
     if (Date.now() - startTime > MAX_BATCH_TIME_MS) {
@@ -371,16 +437,9 @@ const autoImportPastPapersService = async ({
       );
 
       // Resolve subjectId in MongoDB
-      let resolvedSubjectId = subjectMap.get(`${item.examType}-${item.subject.toLowerCase()}`) || null;
-      if (!resolvedSubjectId) {
-        const foundSub = await Subject.findOne({
-          examType: item.examType,
-          name: { $regex: new RegExp(`^${item.subject}$`, 'i') },
-        });
-        if (foundSub) {
-          resolvedSubjectId = foundSub._id;
-          subjectMap.set(`${item.examType}-${item.subject.toLowerCase()}`, foundSub._id);
-        }
+      const resolvedSubId = await resolveSubjectId(item.examType, item.subject, subjectMap);
+      if (!resolvedSubId) {
+        unmatchedSet.add(`${item.examType}: ${item.subject}`);
       }
 
       // Generate Slug & Create PastPaper Record
@@ -394,7 +453,7 @@ const autoImportPastPapersService = async ({
         level: item.examType === 'OL' ? 'O/L' : 'A/L',
         stream: item.stream || 'General',
         subject: item.subject,
-        subjectId: resolvedSubjectId,
+        subjectId: resolvedSubId,
         year: item.year,
         medium: item.medium,
         paperType: item.paperType,
@@ -406,8 +465,8 @@ const autoImportPastPapersService = async ({
         fileName: `${finalSlug}.pdf`,
         fileSize: pdfBuffer.length,
         fileHash,
-        status: 'draft', // MUST initially be draft per requirement 10
-        permissionConfirmed: false, // MUST NOT automatically confirm permission per requirement 10
+        status: 'draft', // MUST initially be draft per requirement
+        permissionConfirmed: false, // MUST NOT automatically confirm permission per requirement
         source: 'PaperZone Auto Import',
         sourceName: 'PaperZone',
         sourceUrl: item.sourceUrl,
@@ -424,6 +483,10 @@ const autoImportPastPapersService = async ({
         year: item.year || 'N/A',
         subject: item.subject || 'Unknown',
         url: item.sourceUrl || item.downloadUrl || 'N/A',
+        downloadUrl: item.downloadUrl || item.sourceUrl || 'N/A',
+        examType: item.examType || 'OL',
+        medium: item.medium || 'English',
+        paperType: item.paperType || 'Past Paper',
         error: paperError.message || 'Unknown processing error',
       });
       console.error(`[AutoImport Error] ${item.year} ${item.subject}:`, paperError.message);
@@ -432,6 +495,7 @@ const autoImportPastPapersService = async ({
 
   const nextCursor = parsedCursor + processedCount;
   const hasMore = nextCursor < totalDiscovered;
+  stats.unmatchedSubjects = Array.from(unmatchedSet);
 
   return {
     success: true,
@@ -440,6 +504,7 @@ const autoImportPastPapersService = async ({
       imported: stats.imported,
       skipped: stats.skipped,
       failed: stats.failed,
+      unmatchedSubjects: stats.unmatchedSubjects,
     },
     nextCursor,
     hasMore,
