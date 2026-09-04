@@ -122,3 +122,9 @@ export const togglePastPaperStatus = async (id) => {
   const response = await api.patch(`/past-papers/${id}/status`);
   return response.data;
 };
+
+export const autoImportPastPapers = async (data = { startYear: 2016, endYear: 2025 }) => {
+  const response = await api.post('/past-papers/auto-import', data);
+  return response.data;
+};
+

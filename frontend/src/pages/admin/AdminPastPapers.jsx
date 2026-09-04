@@ -44,6 +44,7 @@ import {
   updatePastPaper, 
   deletePastPaper, 
   togglePastPaperStatus,
+  autoImportPastPapers,
   getPastPaperStats,
   getSubjects,
   createSubject,
@@ -149,6 +150,46 @@ const AdminPastPapers = () => {
   // University Management Modal State
   const [isUniModalOpen, setIsUniModalOpen] = useState(false);
   const [newUniData, setNewUniData] = useState({ name: '', slug: '', description: '' });
+
+  // ── Auto Import State ─────────────────────────────────────────
+  const [importing, setImporting] = useState(false);
+  const [importStep, setImportStep] = useState('');
+  const [importResult, setImportResult] = useState(null);
+  const [showImportResultModal, setShowImportResultModal] = useState(false);
+
+  const handleAutoImport = async () => {
+    if (!window.confirm('Are you sure you want to auto-import past papers (2016–2025) from PaperZone?')) {
+      return;
+    }
+
+    setImporting(true);
+    setImportStep('Scanning source...');
+
+    const stepTimer1 = setTimeout(() => setImportStep('Downloading PDFs...'), 2000);
+    const stepTimer2 = setTimeout(() => setImportStep('Uploading to Cloudinary...'), 6000);
+    const stepTimer3 = setTimeout(() => setImportStep('Saving database records...'), 12000);
+
+    try {
+      const res = await autoImportPastPapers({ startYear: 2016, endYear: 2025 });
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+
+      if (res?.success) {
+        setImportResult(res.data);
+        setShowImportResultModal(true);
+        fetchAllData();
+      }
+    } catch (err) {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+      alert('Auto import error: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setImporting(false);
+      setImportStep('');
+    }
+  };
 
   // Fetch Stats & Subjects / Papers
   const fetchAllData = async () => {
@@ -401,13 +442,41 @@ const AdminPastPapers = () => {
             </div>
           </div>
 
-          <button
-            onClick={openCreatePaperModal}
-            className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
-          >
-            <FaPlus /> Upload New Past Paper
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAutoImport}
+              disabled={importing}
+              className="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
+            >
+              <FaCloudUploadAlt className={importing ? 'animate-bounce' : ''} />
+              {importing ? `Importing... (${importStep})` : 'Auto Import 2016–2025'}
+            </button>
+
+            <button
+              onClick={openCreatePaperModal}
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
+            >
+              <FaPlus /> Upload New Past Paper
+            </button>
+          </div>
         </div>
+
+        {/* Importing Progress Banner */}
+        {importing && (
+          <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              <div>
+                <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">
+                  Importing... Status: {importStep}
+                </h4>
+                <p className="text-xs text-purple-700">
+                  Scanning PaperZone pages, downloading PDFs, uploading to Cloudinary, and creating MongoDB draft records...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 pt-4 border-t border-slate-100 text-xs">
@@ -1262,8 +1331,94 @@ const AdminPastPapers = () => {
         </div>
       )}
 
+      {/* AUTO IMPORT RESULT MODAL */}
+      {showImportResultModal && importResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <FaCheckCircle className="text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Auto Import Complete</h3>
+                  <p className="text-xs text-slate-500">Summary of imported past papers (2016–2025)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowImportResultModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-xs text-slate-500 font-semibold block">Discovered</span>
+                <span className="text-xl font-extrabold text-slate-900">{importResult.discovered}</span>
+              </div>
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                <span className="text-xs text-emerald-600 font-semibold block">Imported</span>
+                <span className="text-xl font-extrabold text-emerald-800">{importResult.imported}</span>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                <span className="text-xs text-amber-600 font-semibold block">Skipped</span>
+                <span className="text-xl font-extrabold text-amber-800">{importResult.skipped}</span>
+              </div>
+              <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                <span className="text-xs text-rose-600 font-semibold block">Failed</span>
+                <span className="text-xl font-extrabold text-rose-800">{importResult.failed}</span>
+              </div>
+            </div>
+
+            {importResult.failedItems && importResult.failedItems.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider">Failed Resources Details</h4>
+                <div className="overflow-x-auto border border-rose-100 rounded-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-rose-50 text-rose-900 font-bold border-b border-rose-100">
+                      <tr>
+                        <th className="py-2.5 px-3">Year</th>
+                        <th className="py-2.5 px-3">Subject</th>
+                        <th className="py-2.5 px-3">URL</th>
+                        <th className="py-2.5 px-3">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-rose-50 text-slate-700">
+                      {importResult.failedItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-rose-50/50">
+                          <td className="py-2 px-3 font-semibold">{item.year}</td>
+                          <td className="py-2 px-3">{item.subject}</td>
+                          <td className="py-2 px-3 truncate max-w-[150px]">
+                            <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                              {item.url}
+                            </a>
+                          </td>
+                          <td className="py-2 px-3 text-rose-600">{item.error}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowImportResultModal(false)}
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                Close Summary
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
 export default AdminPastPapers;
+

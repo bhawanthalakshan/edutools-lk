@@ -530,6 +530,32 @@ const togglePastPaperStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Auto-import past papers (2016-2025) from PaperZone
+// @route   POST /api/past-papers/auto-import
+// @access  Private/Admin
+const autoImportPastPapers = async (req, res, next) => {
+  try {
+    const { startYear = 2016, endYear = 2025 } = req.body || {};
+    const userId = req.user?._id;
+
+    const { autoImportPastPapersService } = require('../utils/paperzoneImporter');
+
+    const result = await autoImportPastPapersService({
+      startYear: Number(startYear),
+      endYear: Number(endYear),
+      userId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Auto-import completed for past papers (${startYear} - ${endYear})`,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPastPapers,
   getPastPaperStats,
@@ -539,4 +565,6 @@ module.exports = {
   updatePastPaper,
   deletePastPaper,
   togglePastPaperStatus,
+  autoImportPastPapers,
 };
+

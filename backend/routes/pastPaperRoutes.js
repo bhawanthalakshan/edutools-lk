@@ -9,6 +9,7 @@ const {
   updatePastPaper,
   deletePastPaper,
   togglePastPaperStatus,
+  autoImportPastPapers,
 } = require('../controllers/pastPaperController');
 const { protect, admin } = require('../middleware/authMiddleware');
 const { uploadPdf } = require('../utils/storage');
@@ -17,6 +18,9 @@ const { uploadPdf } = require('../utils/storage');
 router.route('/')
   .get(getPastPapers)
   .post(protect, admin, uploadPdf.single('file'), createPastPaper);
+
+router.route('/auto-import')
+  .post(protect, admin, autoImportPastPapers);
 
 router.route('/stats')
   .get(getPastPaperStats);
