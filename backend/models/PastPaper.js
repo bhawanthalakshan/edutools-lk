@@ -124,6 +124,10 @@ const pastPaperSchema = new mongoose.Schema(
       required: [true, 'Permission confirmation is required'],
       default: false,
     },
+    fileHash: {
+      type: String,
+      default: '',
+    },
     // Relational Hierarchy Fields (Optional / Linked)
     subjectId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -154,6 +158,7 @@ const pastPaperSchema = new mongoose.Schema(
 // Indexes for fast server-side filtering & search
 pastPaperSchema.index({ title: 'text', subject: 'text', description: 'text' });
 pastPaperSchema.index({ examType: 1, status: 1, resourceType: 1 });
+pastPaperSchema.index({ fileHash: 1 });
 pastPaperSchema.index({ subjectId: 1, year: -1 });
 pastPaperSchema.index({ universityId: 1, courseId: 1, moduleId: 1 });
 

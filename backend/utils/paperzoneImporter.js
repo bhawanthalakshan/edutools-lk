@@ -17,6 +17,14 @@ const sources = [
 // Helper delay to prevent aggressive requests
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Short-lived in-memory cache for paper discovery (optimization only)
+let discoveryCache = {
+  key: null,
+  data: null,
+  timestamp: 0,
+};
+const DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Helper HTTP fetcher using global fetch
 const fetchText = async (url, options = {}) => {
   const headers = {
@@ -109,98 +117,153 @@ const generateUniqueSlug = async (year, examType, subject, medium, paperType) =>
 };
 
 /**
- * Discover PaperZone resources via API + Sitemap fallback
+ * Fetch raw items from a single PaperZone API page
+ */
+const fetchPaperZoneApiPage = async (pageNumber) => {
+  const apiUrl = `https://api.paperzone.lk/api/papers?page=${pageNumber}`;
+  try {
+    const jsonText = await fetchText(apiUrl, {
+      headers: { Accept: 'application/json' },
+    });
+    const responseData = JSON.parse(jsonText);
+    return {
+      data: responseData?.data || [],
+      lastPage: responseData?.meta?.last_page || 1,
+    };
+  } catch (pageErr) {
+    console.warn(`[AutoImport API] Page ${pageNumber} fetch warning:`, pageErr.message);
+    return { data: [], lastPage: 1 };
+  }
+};
+
+/**
+ * Discover PaperZone resources via API
+ * Filtering strictly for 2016-2025 and O/L & A/L (No University papers)
  */
 const discoverPaperZoneResources = async (startYear = 2016, endYear = 2025) => {
+  const cacheKey = `${startYear}-${endYear}`;
+  if (
+    discoveryCache.key === cacheKey &&
+    discoveryCache.data &&
+    Date.now() - discoveryCache.timestamp < DISCOVERY_CACHE_TTL_MS
+  ) {
+    return discoveryCache.data;
+  }
+
   const finalPaperItems = [];
   const itemKeys = new Set();
 
   try {
-    let currentPage = 1;
-    let lastPage = 1;
+    const firstPageResult = await fetchPaperZoneApiPage(1);
+    const lastPage = firstPageResult.lastPage;
+    let allRawItems = [...firstPageResult.data];
 
-    do {
-      const apiUrl = `https://api.paperzone.lk/api/papers?page=${currentPage}`;
-      try {
-        const jsonText = await fetchText(apiUrl, {
-          headers: { Accept: 'application/json' },
-        });
-        const responseData = JSON.parse(jsonText);
-        const data = responseData?.data || [];
-        const meta = responseData?.meta || {};
-        lastPage = meta.last_page || 1;
+    if (lastPage > 1) {
+      const pageNumbers = [];
+      for (let p = 2; p <= lastPage; p++) pageNumbers.push(p);
 
-        for (const item of data) {
-          const itemYear = parseInt(item.year, 10);
-          if (!itemYear || itemYear < startYear || itemYear > endYear) continue;
-
-          // Exam type normalization (OL vs AL)
-          const gradeName = (item.grade_name || '').toUpperCase();
-          let examType = null;
-          if (gradeName.includes('A/L') || gradeName.includes('AL') || item.grade_id === 11 || item.grade_id === 13) {
-            examType = 'AL';
-          } else if (gradeName.includes('O/L') || gradeName.includes('OL') || item.grade_id === 10) {
-            examType = 'OL';
-          }
-          if (!examType) {
-            const combinedText = `${item.title || ''} ${item.description || ''}`.toUpperCase();
-            if (combinedText.includes('A/L') || combinedText.includes('AL')) examType = 'AL';
-            else if (combinedText.includes('O/L') || combinedText.includes('OL')) examType = 'OL';
-            else examType = 'AL';
-          }
-
-          // PDF file URL validation
-          let fileUrl = item.file_path || item.pdf_url || item.url;
-          if (!fileUrl) continue;
-          if (!fileUrl.startsWith('http')) {
-            fileUrl = new URL(fileUrl, 'https://paperzone.lk').toString();
-          }
-
-          const subject = item.subject_name || item.title || 'General';
-          const medium = normalizeMedium(item.medium);
-          const isMarking = item.is_marking_scheme === 1 || item.paper_type === 'marking' || (item.title || '').toLowerCase().includes('marking');
-          const paperType = isMarking ? 'Marking Scheme' : 'Past Paper';
-
-          const sourcePageUrl = `https://paperzone.lk/papers?grade=${examType}&subject=${encodeURIComponent(subject)}&year=${itemYear}`;
-          const key = `${examType}-${itemYear}-${subject.toLowerCase()}-${medium}-${paperType}-${fileUrl}`;
-
-          if (!itemKeys.has(key)) {
-            itemKeys.add(key);
-            finalPaperItems.push({
-              sourceUrl: sourcePageUrl,
-              downloadUrl: fileUrl,
-              title: item.title || `${itemYear} G.C.E. ${examType} ${subject} (${medium} Medium)`,
-              examType,
-              year: itemYear,
-              subject: subject.trim(),
-              medium,
-              paperType,
-              stream: item.description || 'General',
-            });
-          }
+      const chunkSize = 5;
+      for (let i = 0; i < pageNumbers.length; i += chunkSize) {
+        const chunk = pageNumbers.slice(i, i + chunkSize);
+        const chunkResults = await Promise.all(chunk.map((p) => fetchPaperZoneApiPage(p)));
+        for (const res of chunkResults) {
+          allRawItems.push(...res.data);
         }
-      } catch (pageErr) {
-        console.warn(`[AutoImport API] Page ${currentPage} fetch warning:`, pageErr.message);
+      }
+    }
+
+    for (const item of allRawItems) {
+      const itemYear = parseInt(item.year, 10);
+      if (!itemYear || itemYear < startYear || itemYear > endYear) continue;
+
+      const gradeName = (item.grade_name || '').toUpperCase();
+      const combinedText = `${item.title || ''} ${item.description || ''}`.toUpperCase();
+
+      // Requirement 12: Strict University exclusion
+      if (
+        gradeName.includes('UNI') ||
+        gradeName.includes('DEGREE') ||
+        combinedText.includes('UNIVERSITY') ||
+        combinedText.includes('DEGREE')
+      ) {
+        continue;
       }
 
-      currentPage++;
-      await delay(150);
-    } while (currentPage <= lastPage);
+      let examType = null;
+      if (gradeName.includes('A/L') || gradeName.includes('AL') || item.grade_id === 11 || item.grade_id === 13) {
+        examType = 'AL';
+      } else if (gradeName.includes('O/L') || gradeName.includes('OL') || item.grade_id === 10) {
+        examType = 'OL';
+      }
+
+      if (!examType) {
+        if (combinedText.includes('A/L') || combinedText.includes('AL')) examType = 'AL';
+        else if (combinedText.includes('O/L') || combinedText.includes('OL')) examType = 'OL';
+      }
+
+      // Skip if not strictly OL or AL
+      if (!examType || (examType !== 'OL' && examType !== 'AL')) continue;
+
+      let fileUrl = item.file_path || item.pdf_url || item.url;
+      if (!fileUrl) continue;
+      if (!fileUrl.startsWith('http')) {
+        fileUrl = new URL(fileUrl, 'https://paperzone.lk').toString();
+      }
+
+      const subject = item.subject_name || item.title || 'General';
+      const medium = normalizeMedium(item.medium);
+      const isMarking =
+        item.is_marking_scheme === 1 ||
+        item.paper_type === 'marking' ||
+        (item.title || '').toLowerCase().includes('marking');
+      const paperType = isMarking ? 'Marking Scheme' : 'Past Paper';
+
+      const sourcePageUrl = `https://paperzone.lk/papers?grade=${examType}&subject=${encodeURIComponent(
+        subject
+      )}&year=${itemYear}`;
+      const key = `${examType}-${itemYear}-${subject.toLowerCase()}-${medium}-${paperType}-${fileUrl}`;
+
+      if (!itemKeys.has(key)) {
+        itemKeys.add(key);
+        finalPaperItems.push({
+          sourceUrl: sourcePageUrl,
+          downloadUrl: fileUrl,
+          title: item.title || `${itemYear} G.C.E. ${examType} ${subject} (${medium} Medium)`,
+          examType,
+          year: itemYear,
+          subject: subject.trim(),
+          medium,
+          paperType,
+          stream: item.description || 'General',
+        });
+      }
+    }
   } catch (apiErr) {
     console.warn('[AutoImport API] Discovery warning:', apiErr.message);
   }
+
+  discoveryCache = {
+    key: cacheKey,
+    data: finalPaperItems,
+    timestamp: Date.now(),
+  };
 
   return finalPaperItems;
 };
 
 /**
- * Main Auto-Import Runner function
+ * Main Auto-Import Service: Processes ONE bounded batch per call
  */
 const autoImportPastPapersService = async ({
   startYear = 2016,
   endYear = 2025,
+  batchSize = 10,
+  cursor = 0,
   userId = null,
 } = {}) => {
+  const parsedBatchSize = Math.max(1, Math.min(Number(batchSize) || 10, 50));
+  const parsedCursor = Math.max(0, Number(cursor) || 0);
+
   const stats = {
     discovered: 0,
     imported: 0,
@@ -209,30 +272,49 @@ const autoImportPastPapersService = async ({
     failedItems: [],
   };
 
-  console.log(`[AutoImport] Starting Past Paper import for years ${startYear} to ${endYear}...`);
-
-  // Step 1: Discover resources from PaperZone API
   const discoveredItems = await discoverPaperZoneResources(startYear, endYear);
-  stats.discovered = discoveredItems.length;
+  const totalDiscovered = discoveredItems.length;
+  stats.discovered = totalDiscovered;
 
-  console.log(`[AutoImport] Discovered ${stats.discovered} candidate paper resources.`);
+  if (parsedCursor >= totalDiscovered) {
+    return {
+      success: true,
+      summary: {
+        discovered: totalDiscovered,
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+      },
+      nextCursor: parsedCursor,
+      hasMore: false,
+      failedItems: [],
+    };
+  }
 
-  // Cache existing subjects by name & examType for quick reference
+  const batchItems = discoveredItems.slice(parsedCursor, parsedCursor + parsedBatchSize);
+
+  // Pre-cache subjects by name & examType
   const existingSubjects = await Subject.find({});
   const subjectMap = new Map();
   existingSubjects.forEach((s) => {
     subjectMap.set(`${s.examType}-${s.name.toLowerCase()}`, s._id);
   });
 
-  // Step 2: Process each discovered paper item
-  for (let i = 0; i < discoveredItems.length; i++) {
-    const item = discoveredItems[i];
+  const startTime = Date.now();
+  const MAX_BATCH_TIME_MS = 8000; // 8 seconds timeout guard for serverless
+  let processedCount = 0;
 
-    // Respectful delay between requests
-    await delay(300);
+  for (let i = 0; i < batchItems.length; i++) {
+    if (Date.now() - startTime > MAX_BATCH_TIME_MS) {
+      console.log(`[AutoImport Batch] Time limit reached (${Date.now() - startTime}ms). Yielding batch early.`);
+      break;
+    }
+
+    const item = batchItems[i];
+    processedCount++;
 
     try {
-      // Duplicate Check 1: Check existing PastPaper record by sourceUrl or matching metadata
+      // Duplicate Check 1: DB Lookup by sourceUrl, fileUrl, or metadata match
       const existingRecord = await PastPaper.findOne({
         $or: [
           { sourceUrl: item.sourceUrl },
@@ -249,11 +331,11 @@ const autoImportPastPapersService = async ({
 
       if (existingRecord) {
         stats.skipped++;
-        console.log(`[AutoImport] Skipped duplicate paper: ${item.year} ${item.examType} ${item.subject} (${item.medium})`);
+        console.log(`[AutoImport Batch] Skipped duplicate: ${item.year} ${item.examType} ${item.subject} (${item.medium})`);
         continue;
       }
 
-      // Step 3: Download PDF document buffer
+      // Download PDF document buffer
       let pdfBuffer;
       try {
         pdfBuffer = await fetchBuffer(item.downloadUrl);
@@ -261,26 +343,34 @@ const autoImportPastPapersService = async ({
         throw new Error(`Failed to download PDF file from ${item.downloadUrl}: ${dlErr.message}`);
       }
 
-      // Step 4: Validate PDF format using magic bytes
+      // Validate PDF format using magic bytes
       if (!isPdfBuffer(pdfBuffer)) {
-        throw new Error(`Downloaded content from ${item.downloadUrl} is not a valid PDF file (invalid magic header).`);
+        throw new Error(`Downloaded content from ${item.downloadUrl} is not a valid PDF file.`);
       }
 
-      // Duplicate Check 2: File Hash (SHA256) check
+      // Duplicate Check 2: SHA256 File Hash
       const fileHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
+      const hashRecord = await PastPaper.findOne({ fileHash });
+      if (hashRecord) {
+        stats.skipped++;
+        console.log(`[AutoImport Batch] Skipped duplicate file hash: ${item.year} ${item.subject}`);
+        continue;
+      }
 
-      // Step 5: Upload PDF to Cloudinary storage
+      // Upload PDF to Cloudinary storage
       const examFolder = item.examType.toLowerCase();
       const cloudinaryFolder = `edutools-lk/past-papers/${examFolder}`;
-      const safeFilename = `${item.year}-${item.examType.toLowerCase()}-${item.subject.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${item.medium.toLowerCase()}`.replace(/(^-|-$)/g, '');
-      
+      const safeFilename = `${item.year}-${item.examType.toLowerCase()}-${item.subject
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')}-${item.medium.toLowerCase()}`.replace(/(^-|-$)/g, '');
+
       const cloudinaryResult = await uploadToCloudinary(
         pdfBuffer,
         cloudinaryFolder,
         `${safeFilename}.pdf`
       );
 
-      // Step 6: Resolve subjectId in MongoDB
+      // Resolve subjectId in MongoDB
       let resolvedSubjectId = subjectMap.get(`${item.examType}-${item.subject.toLowerCase()}`) || null;
       if (!resolvedSubjectId) {
         const foundSub = await Subject.findOne({
@@ -293,7 +383,7 @@ const autoImportPastPapersService = async ({
         }
       }
 
-      // Step 7: Generate Slug & Create PastPaper Record
+      // Generate Slug & Create PastPaper Record
       const paperTitle = item.title || `${item.year} G.C.E. ${item.examType} ${item.subject} Past Paper (${item.medium} Medium)`;
       const finalSlug = await generateUniqueSlug(item.year, item.examType, item.subject, item.medium, item.paperType);
 
@@ -315,8 +405,9 @@ const autoImportPastPapersService = async ({
         cloudinaryPublicId: cloudinaryResult.public_id,
         fileName: `${finalSlug}.pdf`,
         fileSize: pdfBuffer.length,
-        status: 'draft', // MUST initially be draft per requirement
-        permissionConfirmed: false, // MUST NOT automatically confirm permission per requirement
+        fileHash,
+        status: 'draft', // MUST initially be draft per requirement 10
+        permissionConfirmed: false, // MUST NOT automatically confirm permission per requirement 10
         source: 'PaperZone Auto Import',
         sourceName: 'PaperZone',
         sourceUrl: item.sourceUrl,
@@ -326,7 +417,7 @@ const autoImportPastPapersService = async ({
       });
 
       stats.imported++;
-      console.log(`[AutoImport] Successfully imported: ${paperTitle}`);
+      console.log(`[AutoImport Batch] Successfully imported: ${paperTitle}`);
     } catch (paperError) {
       stats.failed++;
       stats.failedItems.push({
@@ -339,8 +430,21 @@ const autoImportPastPapersService = async ({
     }
   }
 
-  console.log(`[AutoImport Finished] Discovered: ${stats.discovered}, Imported: ${stats.imported}, Skipped: ${stats.skipped}, Failed: ${stats.failed}`);
-  return stats;
+  const nextCursor = parsedCursor + processedCount;
+  const hasMore = nextCursor < totalDiscovered;
+
+  return {
+    success: true,
+    summary: {
+      discovered: totalDiscovered,
+      imported: stats.imported,
+      skipped: stats.skipped,
+      failed: stats.failed,
+    },
+    nextCursor,
+    hasMore,
+    failedItems: stats.failedItems,
+  };
 };
 
 module.exports = {

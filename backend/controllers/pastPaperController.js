@@ -530,12 +530,12 @@ const togglePastPaperStatus = async (req, res, next) => {
   }
 };
 
-// @desc    Auto-import past papers (2016-2025) from PaperZone
+// @desc    Auto-import past papers in batches (2016-2025) from PaperZone
 // @route   POST /api/past-papers/auto-import
 // @access  Private/Admin
 const autoImportPastPapers = async (req, res, next) => {
   try {
-    const { startYear = 2016, endYear = 2025 } = req.body || {};
+    const { startYear = 2016, endYear = 2025, batchSize = 10, cursor = 0 } = req.body || {};
     const userId = req.user?._id;
 
     const { autoImportPastPapersService } = require('../utils/paperzoneImporter');
@@ -543,13 +543,17 @@ const autoImportPastPapers = async (req, res, next) => {
     const result = await autoImportPastPapersService({
       startYear: Number(startYear),
       endYear: Number(endYear),
+      batchSize: Number(batchSize),
+      cursor: Number(cursor),
       userId,
     });
 
     res.status(200).json({
       success: true,
-      message: `Auto-import completed for past papers (${startYear} - ${endYear})`,
-      data: result,
+      summary: result.summary,
+      nextCursor: result.nextCursor,
+      hasMore: result.hasMore,
+      failedItems: result.failedItems,
     });
   } catch (error) {
     next(error);
@@ -567,4 +571,3 @@ module.exports = {
   togglePastPaperStatus,
   autoImportPastPapers,
 };
-

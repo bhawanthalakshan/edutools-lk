@@ -153,42 +153,130 @@ const AdminPastPapers = () => {
 
   // ── Auto Import State ─────────────────────────────────────────
   const [importing, setImporting] = useState(false);
-  const [importStep, setImportStep] = useState('');
+  const importCancelledRef = React.useRef(false);
+  const [importProgress, setImportProgress] = useState({
+    totalDiscovered: 0,
+    processedCount: 0,
+    importedCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    currentBatch: 0,
+    nextCursor: 0,
+    hasMore: true,
+    failedItems: [],
+    statusText: '',
+  });
   const [importResult, setImportResult] = useState(null);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
 
-  const handleAutoImport = async () => {
-    if (!window.confirm('Are you sure you want to auto-import past papers (2016–2025) from PaperZone?')) {
+  const handleStartAutoImport = async () => {
+    if (!window.confirm('Are you sure you want to auto-import past papers (2016–2025) in batches from PaperZone?')) {
       return;
     }
 
     setImporting(true);
-    setImportStep('Scanning source...');
+    importCancelledRef.current = false;
 
-    const stepTimer1 = setTimeout(() => setImportStep('Downloading PDFs...'), 2000);
-    const stepTimer2 = setTimeout(() => setImportStep('Uploading to Cloudinary...'), 6000);
-    const stepTimer3 = setTimeout(() => setImportStep('Saving database records...'), 12000);
+    let cursor = 0;
+    const batchSize = 10;
+    let currentBatchNum = 0;
+    let accumImported = 0;
+    let accumSkipped = 0;
+    let accumFailed = 0;
+    let accumFailedItems = [];
+    let totalDiscovered = 0;
+
+    setImportProgress({
+      totalDiscovered: 0,
+      processedCount: 0,
+      importedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      currentBatch: 1,
+      nextCursor: 0,
+      hasMore: true,
+      failedItems: [],
+      statusText: 'Initializing PaperZone batch discovery...',
+    });
 
     try {
-      const res = await autoImportPastPapers({ startYear: 2016, endYear: 2025 });
-      clearTimeout(stepTimer1);
-      clearTimeout(stepTimer2);
-      clearTimeout(stepTimer3);
+      while (!importCancelledRef.current) {
+        currentBatchNum++;
+        setImportProgress((prev) => ({
+          ...prev,
+          currentBatch: currentBatchNum,
+          statusText: `Processing Batch #${currentBatchNum}...`,
+        }));
 
-      if (res?.success) {
-        setImportResult(res.data);
-        setShowImportResultModal(true);
-        fetchAllData();
+        const res = await autoImportPastPapers({
+          startYear: 2016,
+          endYear: 2025,
+          batchSize,
+          cursor,
+        });
+
+        if (!res?.success) {
+          alert('Batch import error: ' + (res?.message || 'Failed batch response from server'));
+          break;
+        }
+
+        const summary = res.summary || {};
+        totalDiscovered = summary.discovered || totalDiscovered;
+        accumImported += summary.imported || 0;
+        accumSkipped += summary.skipped || 0;
+        accumFailed += summary.failed || 0;
+        if (res.failedItems && res.failedItems.length > 0) {
+          accumFailedItems = [...accumFailedItems, ...res.failedItems];
+        }
+
+        const nextCursor = res.nextCursor !== undefined ? res.nextCursor : cursor + batchSize;
+        const hasMore = Boolean(res.hasMore);
+
+        setImportProgress({
+          totalDiscovered,
+          processedCount: nextCursor,
+          importedCount: accumImported,
+          skippedCount: accumSkipped,
+          failedCount: accumFailed,
+          currentBatch: currentBatchNum,
+          nextCursor,
+          hasMore,
+          failedItems: accumFailedItems,
+          statusText: hasMore
+            ? `Batch #${currentBatchNum} finished. Requesting next batch...`
+            : 'All batches completed successfully.',
+        });
+
+        cursor = nextCursor;
+
+        if (!hasMore || importCancelledRef.current) {
+          break;
+        }
       }
     } catch (err) {
-      clearTimeout(stepTimer1);
-      clearTimeout(stepTimer2);
-      clearTimeout(stepTimer3);
-      alert('Auto import error: ' + (err.response?.data?.message || err.message));
+      alert('Batch import error: ' + (err.response?.data?.message || err.message));
     } finally {
+      const wasCancelled = importCancelledRef.current;
       setImporting(false);
-      setImportStep('');
+      setImportResult({
+        discovered: totalDiscovered,
+        imported: accumImported,
+        skipped: accumSkipped,
+        failed: accumFailed,
+        failedItems: accumFailedItems,
+        wasCancelled,
+      });
+      setShowImportResultModal(true);
+      fetchAllData();
     }
+  };
+
+  const handleStopAutoImport = () => {
+    importCancelledRef.current = true;
+    setImportProgress((prev) => ({
+      ...prev,
+      statusText: 'Stopping import after current batch finishes...',
+    }));
   };
 
   // Fetch Stats & Subjects / Papers
@@ -443,37 +531,91 @@ const AdminPastPapers = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleAutoImport}
-              disabled={importing}
-              className="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
-            >
-              <FaCloudUploadAlt className={importing ? 'animate-bounce' : ''} />
-              {importing ? `Importing... (${importStep})` : 'Auto Import 2016–2025'}
-            </button>
+            {!importing ? (
+              <button
+                onClick={handleStartAutoImport}
+                disabled={importing}
+                className="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
+              >
+                <FaCloudUploadAlt />
+                Auto Import 2016–2025
+              </button>
+            ) : (
+              <button
+                onClick={handleStopAutoImport}
+                className="px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0 animate-pulse"
+              >
+                <FaBan />
+                Stop Import
+              </button>
+            )}
 
             <button
               onClick={openCreatePaperModal}
-              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
+              disabled={importing}
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors shrink-0"
             >
               <FaPlus /> Upload New Past Paper
             </button>
           </div>
         </div>
 
-        {/* Importing Progress Banner */}
+        {/* Batched Importing Progress Banner */}
         {importing && (
-          <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex items-center justify-between animate-pulse">
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-              <div>
-                <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">
-                  Importing... Status: {importStep}
-                </h4>
-                <p className="text-xs text-purple-700">
-                  Scanning PaperZone pages, downloading PDFs, uploading to Cloudinary, and creating MongoDB draft records...
-                </p>
+          <div className="bg-purple-50 border border-purple-200 p-5 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-purple-950 uppercase tracking-wider">
+                    Resumable Vercel-Safe Batch Import — Batch #{importProgress.currentBatch}
+                  </h4>
+                  <p className="text-xs text-purple-800 font-medium">
+                    {importProgress.statusText}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={handleStopAutoImport}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 self-start sm:self-center shadow-sm"
+              >
+                <FaBan /> Stop / Cancel Import
+              </button>
+            </div>
+
+            {/* Progress Bar & Counter */}
+            {importProgress.totalDiscovered > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                  <span>
+                    Importing {Math.min(importProgress.processedCount, importProgress.totalDiscovered)} / {importProgress.totalDiscovered}
+                  </span>
+                  <span>
+                    {Math.min(100, Math.round((importProgress.processedCount / importProgress.totalDiscovered) * 100))}%
+                  </span>
+                </div>
+                <div className="w-full bg-purple-200 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-purple-600 h-full transition-all duration-300 rounded-full"
+                    style={{
+                      width: `${Math.min(100, Math.round((importProgress.processedCount / importProgress.totalDiscovered) * 100))}%`,
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Realtime Batch Stats Badges */}
+            <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-bold">
+              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
+                Imported: {importProgress.importedCount}
+              </span>
+              <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg">
+                Skipped (Duplicates): {importProgress.skippedCount}
+              </span>
+              <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg">
+                Failed: {importProgress.failedCount}
+              </span>
             </div>
           </div>
         )}
@@ -1337,11 +1479,13 @@ const AdminPastPapers = () => {
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <FaCheckCircle className="text-xl" />
+                <div className={`p-2.5 rounded-xl ${importResult.wasCancelled ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                  {importResult.wasCancelled ? <FaExclamationTriangle className="text-xl" /> : <FaCheckCircle className="text-xl" />}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Auto Import Complete</h3>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {importResult.wasCancelled ? 'Import Stopped by Admin' : 'Import Complete'}
+                  </h3>
                   <p className="text-xs text-slate-500">Summary of imported past papers (2016–2025)</p>
                 </div>
               </div>
@@ -1355,19 +1499,19 @@ const AdminPastPapers = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <span className="text-xs text-slate-500 font-semibold block">Discovered</span>
+                <span className="text-xs text-slate-500 font-semibold block">Total Discovered</span>
                 <span className="text-xl font-extrabold text-slate-900">{importResult.discovered}</span>
               </div>
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                <span className="text-xs text-emerald-600 font-semibold block">Imported</span>
+                <span className="text-xs text-emerald-600 font-semibold block">Total Imported</span>
                 <span className="text-xl font-extrabold text-emerald-800">{importResult.imported}</span>
               </div>
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                <span className="text-xs text-amber-600 font-semibold block">Skipped</span>
+                <span className="text-xs text-amber-600 font-semibold block">Total Skipped</span>
                 <span className="text-xl font-extrabold text-amber-800">{importResult.skipped}</span>
               </div>
               <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                <span className="text-xs text-rose-600 font-semibold block">Failed</span>
+                <span className="text-xs text-rose-600 font-semibold block">Total Failed</span>
                 <span className="text-xl font-extrabold text-rose-800">{importResult.failed}</span>
               </div>
             </div>
@@ -1421,4 +1565,3 @@ const AdminPastPapers = () => {
 };
 
 export default AdminPastPapers;
-
